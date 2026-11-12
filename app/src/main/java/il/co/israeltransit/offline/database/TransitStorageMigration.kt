@@ -22,12 +22,15 @@ class TransitStorageMigration(context: Context) {
         val target: File,
         val temporary: File,
         val backup: File,
+        val isDirectory: Boolean,
         val validate: (File) -> Unit
     )
 
     companion object {
         private const val DATABASE_NAME = "israel-transit.sqlite"
         private const val MAP_NAME = "israel-basemap.pmtiles"
+        private const val ADDRESSES_NAME = "israel-addresses.sqlite"
+        private const val GRAPHHOPPER_DIR_NAME = "graphhopper-foot"
         private const val EXTRA_SPACE = 50L * 1024L * 1024L
     }
 
@@ -56,15 +59,18 @@ class TransitStorageMigration(context: Context) {
         val sourceMap = File(sourceDirectory, MAP_NAME)
         val targetMap = File(targetDirectory, MAP_NAME)
 
+        val sourceAddresses = File(sourceDirectory, ADDRESSES_NAME)
+        val targetAddresses = File(targetDirectory, ADDRESSES_NAME)
+
+        val sourceGraphHopper = File(sourceDirectory, GRAPHHOPPER_DIR_NAME)
+
         val databaseExists = sourceDatabase.isFile
         val mapExists = sourceMap.isFile
+        val addressesExists = sourceAddresses.isFile
+        val graphHopperExists = sourceGraphHopper.isDirectory && !(sourceGraphHopper.listFiles().isNullOrEmpty())
 
-        if (!databaseExists && !targetDatabase.isFile) {
-            return failure("לא נמצא מאגר תחבורה תקין במיקום הנוכחי או החדש")
-        }
-
-        if (!databaseExists && mapExists.not() && !targetMap.isFile) {
-            return failure("לא נמצאו קבצים להעברה")
+        if (!databaseExists && !targetDatabase.isFile && !mapExists && !targetMap.isFile) {
+            return failure("לא נמצאו מאגר תחבורה או קבצי מפה תקינים להעברה")
         }
 
         return try {
@@ -74,7 +80,7 @@ class TransitStorageMigration(context: Context) {
 
             if (databaseExists) {
                 validateDatabase(sourceDatabase)
-            } else {
+            } else if (targetDatabase.isFile) {
                 validateDatabase(targetDatabase)
             }
 
@@ -84,12 +90,23 @@ class TransitStorageMigration(context: Context) {
                 validatePmtiles(targetMap)
             }
 
+            if (addressesExists) {
+                validateAddressesDatabase(sourceAddresses)
+            } else if (targetAddresses.exists()) {
+                validateAddressesDatabase(targetAddresses)
+            }
+
+            if (graphHopperExists) {
+                validateDirectory(sourceGraphHopper)
+            }
+
             val assets = mutableListOf<Asset>()
 
             if (databaseExists) {
                 assets += createAsset(
                     sourceDatabase,
                     targetDatabase,
+                    isDirectory = false,
                     ::validateDatabase
                 )
             }
@@ -98,12 +115,35 @@ class TransitStorageMigration(context: Context) {
                 assets += createAsset(
                     sourceMap,
                     targetMap,
+                    isDirectory = false,
                     ::validatePmtiles
                 )
             }
 
+            if (addressesExists) {
+                assets += createAsset(
+                    sourceAddresses,
+                    targetAddresses,
+                    isDirectory = false,
+                    ::validateAddressesDatabase
+                )
+            }
+
+            if (graphHopperExists) {
+                assets += createAsset(
+                    sourceGraphHopper,
+                    File(targetDirectory, GRAPHHOPPER_DIR_NAME),
+                    isDirectory = true,
+                    ::validateDirectory
+                )
+            }
+
+            if (assets.isEmpty()) {
+                return failure("לא נמצאו קבצים להעברה")
+            }
+
             val requiredBytes = assets.sumOf {
-                it.source.length()
+                calculateSize(it.source)
             } + EXTRA_SPACE
 
             val availableBytes = StatFs(
@@ -122,7 +162,7 @@ class TransitStorageMigration(context: Context) {
                     )
                 }
 
-                if (asset.temporary.exists() && !asset.temporary.delete()) {
+                if (asset.temporary.exists() && !deleteRecursively(asset.temporary)) {
                     error("לא ניתן לנקות קובץ העברה זמני")
                 }
             }
@@ -132,25 +172,36 @@ class TransitStorageMigration(context: Context) {
             try {
                 // Copy and validate every source before replacing targets.
                 for (asset in assets) {
-                    copyFile(asset.source, asset.temporary)
-                    asset.validate(asset.temporary)
-
-                    check(
-                        asset.temporary.length() == asset.source.length()
-                    ) {
-                        "גודל הקובץ שהועתק אינו תואם למקור"
+                    if (asset.isDirectory) {
+                        copyDirectory(asset.source, asset.temporary)
+                        asset.validate(asset.temporary)
+                        check(
+                            calculateSize(asset.temporary) == calculateSize(asset.source)
+                        ) {
+                            "גודל התיקייה שהועתקה אינו תואם למקור"
+                        }
+                    } else {
+                        copyFile(asset.source, asset.temporary)
+                        asset.validate(asset.temporary)
+                        check(
+                            asset.temporary.length() == asset.source.length()
+                        ) {
+                            "גודל הקובץ שהועתק אינו תואם למקור"
+                        }
                     }
                 }
 
                 // Preserve existing target files before installing replacements.
                 for (asset in assets) {
                     if (asset.target.exists()) {
-                        check(asset.target.isFile) {
-                            "היעד הקיים אינו קובץ רגיל"
+                        check(
+                            if (asset.isDirectory) asset.target.isDirectory else asset.target.isFile
+                        ) {
+                            "היעד הקיים אינו תקין"
                         }
 
                         check(asset.target.renameTo(asset.backup)) {
-                            "לא ניתן לשמור זמנית את הקובץ הקיים"
+                            "לא ניתן לשמור זמנית את הנתונים הקיימים"
                         }
                     }
 
@@ -166,7 +217,9 @@ class TransitStorageMigration(context: Context) {
                     asset.validate(asset.target)
                 }
 
-                validateDatabase(targetDatabase)
+                if (targetDatabase.isFile) {
+                    validateDatabase(targetDatabase)
+                }
 
                 if (targetMap.exists()) {
                     validatePmtiles(targetMap)
@@ -180,7 +233,7 @@ class TransitStorageMigration(context: Context) {
                 storage.selectLocation(sourceLocation.id)
 
                 for (asset in installed.asReversed()) {
-                    asset.target.delete()
+                    deleteRecursively(asset.target)
 
                     if (asset.backup.exists()) {
                         asset.backup.renameTo(asset.target)
@@ -188,7 +241,7 @@ class TransitStorageMigration(context: Context) {
                 }
 
                 for (asset in assets) {
-                    asset.temporary.delete()
+                    deleteRecursively(asset.temporary)
 
                     if (
                         asset.backup.exists() &&
@@ -207,7 +260,7 @@ class TransitStorageMigration(context: Context) {
 
             for (asset in assets) {
                 if (
-                    !asset.source.delete() ||
+                    !deleteRecursively(asset.source) ||
                     asset.source.exists()
                 ) {
                     undeletedSources += asset.source.name
@@ -226,10 +279,10 @@ class TransitStorageMigration(context: Context) {
             val undeletedBackups = mutableListOf<String>()
 
             for (asset in assets) {
-                if (asset.backup.exists() && !asset.backup.delete()) {
+                if (asset.backup.exists() && !deleteRecursively(asset.backup)) {
                     undeletedBackups += asset.backup.name
                 }
-                asset.temporary.delete()
+                deleteRecursively(asset.temporary)
             }
 
             if (undeletedBackups.isNotEmpty()) {
@@ -243,8 +296,8 @@ class TransitStorageMigration(context: Context) {
 
             MigrationResult(
                 true,
-                "ההעברה הושלמה. מאגר התחבורה והמפה הועברו, " +
-                    "הקבצים אומתו והעותקים הישנים נמחקו."
+                "ההעברה הושלמה. מאגר התחבורה, המפה וקובצי הניווט הועברו, " +
+                    "אומתו והעותקים הישנים נמחקו."
             )
         } catch (exception: Exception) {
             failure(
@@ -257,6 +310,7 @@ class TransitStorageMigration(context: Context) {
     private fun createAsset(
         source: File,
         target: File,
+        isDirectory: Boolean,
         validator: (File) -> Unit
     ): Asset {
         return Asset(
@@ -270,8 +324,46 @@ class TransitStorageMigration(context: Context) {
                 target.parentFile,
                 "${target.name}.migration.previous"
             ),
+            isDirectory = isDirectory,
             validate = validator
         )
+    }
+
+    private fun calculateSize(file: File): Long {
+        if (!file.exists()) return 0L
+        if (file.isFile) return file.length()
+        return file.listFiles()?.sumOf { calculateSize(it) } ?: 0L
+    }
+
+    private fun deleteRecursively(file: File): Boolean {
+        if (!file.exists()) return true
+        var success = true
+        if (file.isDirectory) {
+            file.listFiles()?.forEach { child ->
+                if (!deleteRecursively(child)) {
+                    success = false
+                }
+            }
+        }
+        if (!file.delete()) {
+            success = false
+        }
+        return success
+    }
+
+    private fun copyDirectory(source: File, destination: File) {
+        check(source.isDirectory) { "תיקיית המקור אינה תקינה" }
+        if (!destination.exists() && !destination.mkdirs()) {
+            error("לא ניתן ליצור תיקיית יעד זמנית")
+        }
+        source.listFiles()?.forEach { child ->
+            val targetChild = File(destination, child.name)
+            if (child.isDirectory) {
+                copyDirectory(child, targetChild)
+            } else {
+                copyFile(child, targetChild)
+            }
+        }
     }
 
     private fun copyFile(
@@ -286,6 +378,49 @@ class TransitStorageMigration(context: Context) {
                 )
                 output.fd.sync()
             }
+        }
+    }
+
+    private fun validateDirectory(dir: File) {
+        require(dir.isDirectory && !(dir.listFiles().isNullOrEmpty())) {
+            "תיקיית נתוני ההליכה חסרה או ריקה"
+        }
+    }
+
+    private fun validateAddressesDatabase(file: File) {
+        require(file.isFile && file.length() > 100L) {
+            "קובץ אינדקס הכתובות חסר או קטן מדי"
+        }
+
+        FileInputStream(file).use { input ->
+            val header = ByteArray(16)
+            require(input.read(header) == 16) {
+                "לא ניתן לקרוא את כותרת קובץ הכתובות"
+            }
+            val expected = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+            require(header.contentEquals(expected)) {
+                "קובץ הכתובות אינו מסד נתונים SQLite תקין"
+            }
+        }
+
+        val database = SQLiteDatabase.openDatabase(
+            file.absolutePath,
+            null,
+            SQLiteDatabase.OPEN_READONLY
+        )
+        try {
+            for (table in listOf("places", "streets", "addresses")) {
+                database.rawQuery(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    arrayOf(table)
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) {
+                        "חסרה טבלה בקובץ הכתובות: $table"
+                    }
+                }
+            }
+        } finally {
+            database.close()
         }
     }
 
