@@ -26,7 +26,8 @@ private const val TRANSIT_DATA_URL =
     "https://github.com/motib4691/israel-offline-transit/releases/download/transit-data/israel-transit.sqlite.gz"
 
 private const val OFFLINE_MAP_URL =
-    "https://github.com/motib4691/israel-offline-transit/releases/download/offline-map/israel-basemap.pmtiles"
+    "https://github.com/motib4691/israel-offline-transit/releases/download/offline-map/israel-map-pack.zip
+"
 
 @Composable
 fun SettingsScreen(
@@ -390,7 +391,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "מפה לא מקוונת (israel-basemap.pmtiles)",
+                            text = "מפה לא מקוונת (israel-map-pack.zip)",
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodySmall
                         )
