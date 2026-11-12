@@ -36,7 +36,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var busy by remember { mutableStateOf(false) }
-    var statusMessage by remember { mutableStateOf("בחר קובץ נתונים או קובץ מפה להתקנה.") }
+    var statusMessage by remember { mutableStateOf("בחר קובץ נתונים או חבילת מפה להתקנה.") }
     var refreshVersion by remember { mutableIntStateOf(0) }
 
     val locations = remember(refreshVersion) { storage.availableLocations() }
@@ -45,6 +45,8 @@ fun UpdateDataScreen(onBack: () -> Unit) {
     }
     val databaseAvailable = remember(refreshVersion) { database.isDatabaseAvailable() }
     val mapAvailable = remember(refreshVersion) { mapStorage.isMapAvailable() }
+    val addressesAvailable = remember(refreshVersion) { mapStorage.isAddressesAvailable() }
+    val walkingGraphAvailable = remember(refreshVersion) { mapStorage.isWalkingGraphAvailable() }
     val lastUpdate = remember(refreshVersion) { database.getLastUpdateDate() }
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
 
@@ -65,7 +67,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
         if (uri != null && !busy) {
             scope.launch {
                 busy = true
-                statusMessage = "מתבצע ייבוא ואימות של קובץ המפה הלא-מקוונת..."
+                statusMessage = "מתבצעים פריסה, ייבוא ואימות של חבילת המפה הלא-מקוונת..."
                 val result = withContext(Dispatchers.IO) { mapStorage.importArchive(uri) }
                 busy = false
                 statusMessage = result.message
@@ -133,7 +135,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             }
         }
 
-        // כרטיס מפה וקטורית PMTiles
+        // כרטיס חבילת מפה וניווט (PMTiles + רחובות + הליכה)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -142,11 +144,24 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("קובץ מפה לא מקוונת (PMTiles)", fontWeight = FontWeight.Bold)
+                Text("חבילת מפה וניווט לא מקוונת", fontWeight = FontWeight.Bold)
                 if (mapAvailable) {
                     Text("קובץ מפה מותקן ותקין", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    if (addressesAvailable && walkingGraphAvailable) {
+                        Text(
+                            text = "כולל חיפוש רחובות וכתובות ורשת ניווט להולכי רגל",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = "הותקנה מפה בסיסית. ייבא את israel-map-pack.zip לתמיכה מלאה בחיפוש רחובות והליכה.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 } else {
-                    Text("עדיין לא הותקן קובץ מפה (אופציונלי)", style = MaterialTheme.typography.bodySmall)
+                    Text("עדיין לא הותקנה חבילת מפה (אופציונלי)", style = MaterialTheme.typography.bodySmall)
                 }
                 FilledTonalButton(
                     onClick = { mapFilePicker.launch(arrayOf("*/*")) },
@@ -154,7 +169,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("ייבוא קובץ מפה (israel-basemap.pmtiles)")
+                    Text("ייבוא חבילת מפה (israel-map-pack.zip)")
                 }
             }
         }
@@ -180,7 +195,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                                 if (!busy && selectedLocationId != loc.id) {
                                     scope.launch {
                                         busy = true
-                                        if (databaseAvailable || mapAvailable) {
+                                        if (databaseAvailable || mapAvailable || addressesAvailable || walkingGraphAvailable) {
                                             val result = withContext(Dispatchers.IO) { migration.moveTo(loc.id) }
                                             statusMessage = result.message
                                         } else {
