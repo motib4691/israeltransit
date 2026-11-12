@@ -26,9 +26,9 @@ private const val TRANSIT_DATA_URL =
     "https://github.com/motib4691/israel-offline-transit/releases/download/transit-data/israel-transit.sqlite.gz"
 
 private const val OFFLINE_MAP_URL =
-    "https://github.com/motib4691/israel-offline-transit/releases/download/offline-map/israel-map-pack.zip
-"
+    "https://github.com/motib4691/israel-offline-transit/releases/download/offline-map/israel-map-pack.zip"
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -102,16 +102,17 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                // בורר אמצעי תחבורה
+                // בורר אמצעי תחבורה מותאם אוטומטית לרוחב המסך
                 Text(
                     text = "העדפת אמצעי תחבורה:",
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
                         TransitModePreference.ALL to "כל האמצעים",
@@ -125,7 +126,14 @@ fun SettingsScreen(
                                 settings.transitModePreference = mode
                                 onSettingsChanged()
                             },
-                            label = { Text(label, fontSize = 12.sp) },
+                            label = {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            },
                             shape = RoundedCornerShape(20.dp)
                         )
                     }
@@ -291,7 +299,7 @@ fun SettingsScreen(
             }
         }
 
-        // כרטיס הוראות הורדת הקבצים והקישורים הישירים (שוחזר במלואו)
+        // כרטיס הוראות הורדת הקבצים והקישורים הישירים
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -327,7 +335,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "• קובץ המפה (PMTiles): יציב מאוד ומכיל את רשת הדרכים בישראל. אין צורך לעדכן אותו אלא אחת לתקופה ממושכת מאוד.",
+                            text = "• חבילת המפה והניווט (israel-map-pack.zip): יציבה מאוד ומכילה את מפת הדרכים בישראל, אינדקס הכתובות ורשת ההליכה. אין צורך לעדכן אותה אלא אחת לתקופה ממושכת.",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
@@ -378,7 +386,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // קישור מפה
+                // קישור חבילת המפה המאוחדת
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
@@ -391,7 +399,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "מפה לא מקוונת (israel-map-pack.zip)",
+                            text = "חבילת מפה וניווט לא מקוונת (israel-map-pack.zip)",
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -403,7 +411,7 @@ fun SettingsScreen(
                         FilledTonalButton(
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(OFFLINE_MAP_URL))
-                                Toast.makeText(context, "קישור המפה הועתק ללוח", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "קישור חבילת המפה הועתק ללוח", Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -441,9 +449,10 @@ fun SettingsScreen(
                     fontSize = 13.sp
                 )
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
                         AppThemeMode.SYSTEM to "מערכת",
@@ -457,7 +466,14 @@ fun SettingsScreen(
                                 settings.themeMode = mode
                                 onSettingsChanged()
                             },
-                            label = { Text(label, fontSize = 12.sp) },
+                            label = {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            },
                             shape = RoundedCornerShape(20.dp)
                         )
                     }
@@ -510,7 +526,7 @@ fun SettingsScreen(
             }
         }
 
-        // כרטיס אודות (שוחזר במלואו)
+        // כרטיס אודות
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
