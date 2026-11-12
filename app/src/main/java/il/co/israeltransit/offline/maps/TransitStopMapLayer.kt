@@ -14,6 +14,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
@@ -23,8 +24,10 @@ import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.textAnchor
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
+import org.maplibre.android.style.layers.PropertyFactory.textFont
 import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
 import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
 import org.maplibre.android.style.layers.PropertyFactory.textOffset
@@ -48,10 +51,13 @@ object TransitStopMapLayer {
     private const val CLUSTER_LAYER_ID = "transit-stops-clusters"
     private const val CLUSTER_COUNT_LAYER_ID = "transit-stops-cluster-count"
     private const val STOP_LAYER_ID = "transit-stops-individual"
+    private const val STOP_LABEL_LAYER_ID = "transit-stops-labels"
     private const val BUS_ICON_ID = "transit-bus-icon"
+    private const val FONT_STACK = "Noto Sans Regular"
 
     private const val MAX_CLUSTER_ZOOM = 13
     private const val CLUSTER_RADIUS = 45
+    private const val MAX_STOPS_PER_VIEWPORT = 6000
 
     private const val LATITUDE_PADDING_FACTOR = 0.15
     private const val LONGITUDE_PADDING_FACTOR = 0.15
@@ -82,6 +88,10 @@ object TransitStopMapLayer {
         val appContext = context.applicationContext
 
         try {
+            if (!style.isFullyLoaded) {
+                return
+            }
+
             // הוספת אייקון אוטובוס מעוצב ישירות ל-Style של המפה
             if (style.getImage(BUS_ICON_ID) == null) {
                 style.addImage(BUS_ICON_ID, createBusStopBitmap(appContext))
@@ -110,14 +120,15 @@ object TransitStopMapLayer {
 
             // רענון נוסף קצר לאחר השלמת ה-Layout של המסך
             mainHandler.postDelayed({
-                refreshViewport(
-                    context = appContext,
-                    style = style,
-                    map = map,
-                    onError = onError
-                )
+                if (style.isFullyLoaded) {
+                    refreshViewport(
+                        context = appContext,
+                        style = style,
+                        map = map,
+                        onError = onError
+                    )
+                }
             }, 400L)
-
         } catch (exception: Exception) {
             onError(exception.message ?: "לא ניתן להתקין את שכבת התחנות")
         }
@@ -179,12 +190,15 @@ object TransitStopMapLayer {
             }
 
             val mapReference = WeakReference(map)
+            val styleReference = WeakReference(style)
             val listener = object : MapLibreMap.OnCameraIdleListener {
                 override fun onCameraIdle() {
                     val currentMap = mapReference.get() ?: return
+                    val currentStyle = styleReference.get() ?: return
+                    if (!currentStyle.isFullyLoaded) return
                     refreshViewport(
                         context = context,
-                        style = style,
+                        style = currentStyle,
                         map = currentMap,
                         onError = onError
                     )
@@ -208,6 +222,8 @@ object TransitStopMapLayer {
         map: MapLibreMap,
         onError: (String) -> Unit
     ) {
+        if (!style.isFullyLoaded) return
+
         val bounds = try {
             val visibleBounds = map.projection.visibleRegion.latLngBounds
             val target = map.cameraPosition.target
@@ -234,7 +250,7 @@ object TransitStopMapLayer {
                     )
                 )
             }
-        } catch (exception: Exception) {
+        } catch (_: Exception) {
             val target = map.cameraPosition.target
             val lat = target?.latitude ?: 31.7683
             val lon = target?.longitude ?: 35.2137
@@ -259,6 +275,7 @@ object TransitStopMapLayer {
 
                 mainHandler.post {
                     if (sequence.get() != requestId) return@post
+                    if (!style.isFullyLoaded) return@post
                     try {
                         val source = style.getSource(SOURCE_ID) as? GeoJsonSource
                             ?: return@post
@@ -316,9 +333,8 @@ object TransitStopMapLayer {
         sequence: AtomicLong,
         requestId: Long
     ): List<Feature>? {
-
         val databaseProvider = TransitDatabase(context)
-        val database: SQLiteDatabase = databaseProvider.openReadOnly() ?: return null
+        val database: SQLiteDatabase = databaseProvider.openReadOnly() ?: return emptyList()
 
         return database.use { db ->
             val longitudeCondition = if (bounds.west <= bounds.east) {
@@ -327,7 +343,6 @@ object TransitStopMapLayer {
                 "(stop_lon >= ? OR stop_lon <= ?)"
             }
 
-            // שליפת stop_code האמיתי מהשלט יחד עם שם התחנה
             val sql = """
                 SELECT
                     stop_id,
@@ -343,7 +358,7 @@ object TransitStopMapLayer {
                     AND stop_lon IS NOT NULL
                     AND stop_lat BETWEEN -90 AND 90
                     AND stop_lon BETWEEN -180 AND 180
-                LIMIT 800
+                LIMIT $MAX_STOPS_PER_VIEWPORT
             """.trimIndent()
 
             val arguments = arrayOf(
@@ -434,6 +449,7 @@ object TransitStopMapLayer {
             Expression.has("point_count")
         ).withProperties(
             textField(Expression.get("point_count_abbreviated")),
+            textFont(arrayOf(FONT_STACK)),
             textSize(11f),
             textColor("#FFFFFF"),
             textHaloColor("#245B85"),
@@ -441,7 +457,7 @@ object TransitStopMapLayer {
         )
         style.addLayer(clusterCountLayer)
 
-        // שכבת תחנות בודדות: אייקון אוטובוס גרפי יפהפה עם שם התחנה
+        // שכבת אייקון תחנות בודדות (מופרדת מהטקסט כדי שהאייקון יוצג תמיד בכל מצב)
         val individualStopsLayer = SymbolLayer(
             STOP_LAYER_ID,
             SOURCE_ID
@@ -449,19 +465,31 @@ object TransitStopMapLayer {
             Expression.not(Expression.has("point_count"))
         ).withProperties(
             iconImage(BUS_ICON_ID),
-            iconSize(1.0f),
+            iconSize(0.95f),
             iconAllowOverlap(true),
-            iconIgnorePlacement(true),
+            iconIgnorePlacement(true)
+        )
+        individualStopsLayer.setMinZoom(11.5f)
+        style.addLayer(individualStopsLayer)
+
+        // שכבת שמות התחנות (נפרדת ומוצגת בזום קרוב)
+        val stopLabelsLayer = SymbolLayer(
+            STOP_LABEL_LAYER_ID,
+            SOURCE_ID
+        ).withFilter(
+            Expression.not(Expression.has("point_count"))
+        ).withProperties(
             textField(Expression.get("stop_name")),
+            textFont(arrayOf(FONT_STACK)),
             textSize(10.5f),
             textColor("#1A2B4C"),
             textHaloColor("#FFFFFF"),
             textHaloWidth(1.8f),
-            textOffset(arrayOf(0f, 1.35f)),
+            textAnchor(Property.TEXT_ANCHOR_TOP),
+            textOffset(arrayOf(0f, 1.15f)),
             textAllowOverlap(false)
         )
-        individualStopsLayer.setMinZoom(13.0f)
-
-        style.addLayer(individualStopsLayer)
+        stopLabelsLayer.setMinZoom(14.5f)
+        style.addLayer(stopLabelsLayer)
     }
 }
