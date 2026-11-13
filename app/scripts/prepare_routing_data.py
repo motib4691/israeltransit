@@ -1,4 +1,3 @@
-
 import argparse
 import sqlite3
 from pathlib import Path
@@ -41,6 +40,7 @@ def prepare_database(db_path):
 
         trip_columns = table_columns(conn, "trips")
         stop_time_columns = table_columns(conn, "stop_times")
+        stops_columns = table_columns(conn, "stops")
 
         required_trip_columns = {"trip_id", "route_id", "service_id"}
         required_stop_columns = {
@@ -309,6 +309,18 @@ def prepare_database(db_path):
             ON calendar(service_id)
             """,
         ]
+
+        if {"stop_lat", "stop_lon"}.issubset(stops_columns):
+            indexes.append("""
+                CREATE INDEX IF NOT EXISTS idx_stops_lat_lon
+                ON stops(stop_lat, stop_lon)
+            """)
+
+        if "stop_code" in stops_columns:
+            indexes.append("""
+                CREATE INDEX IF NOT EXISTS idx_stops_code
+                ON stops(stop_code)
+            """)
 
         for statement in indexes:
             conn.execute(statement)
