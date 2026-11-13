@@ -28,6 +28,50 @@ private const val TRANSIT_DATA_URL =
 private const val OFFLINE_MAP_URL =
     "https://github.com/motib4691/israel-offline-transit/releases/download/offline-map/israel-map-pack.zip"
 
+private data class CreditEntry(
+    val title: String,
+    val license: String,
+    val description: String
+)
+
+private val APP_CREDITS_AND_LICENSES = listOf(
+    CreditEntry(
+        title = "© OpenStreetMap contributors",
+        license = "רישיון: Open Database License (ODbL 1.0)",
+        description = "נתוני המפה, גבולות הים והמים, הפארקים, השבילים, שמות הרחובות, הכתובות ורשת ההליכה בישראל מבוססים על נתוני OpenStreetMap."
+    ),
+    CreditEntry(
+        title = "משרד התחבורה בישראל (GTFS)",
+        license = "מאגר מידע ממשלתי פתוח",
+        description = "רשימת התחנות, הקווים, המסלולים ולוחות הזמנים מבוססים על קובצי ה-GTFS הפתוחים של משרד התחבורה."
+    ),
+    CreditEntry(
+        title = "MapLibre Native Android",
+        license = "רישיון: BSD 2-Clause License",
+        description = "מנוע תצוגת המפה הווקטורית הלא-מקוונת (Copyright © MapLibre contributors)."
+    ),
+    CreditEntry(
+        title = "Protomaps / PMTiles & Tilemaker",
+        license = "רישיון: BSD 3-Clause / FTWPL",
+        description = "פורמט האריחים הווקטוריים הלא-מקוונים PMTiles (Copyright © Protomaps) וכלי יצירת האריחים Tilemaker."
+    ),
+    CreditEntry(
+        title = "GraphHopper Routing Engine",
+        license = "רישיון: Apache License 2.0",
+        description = "מנוע חישוב מסלולי ההליכה והפקת הוראות הפנייה (Copyright © GraphHopper GmbH)."
+    ),
+    CreditEntry(
+        title = "Google Noto Sans & Basemaps Fonts",
+        license = "רישיון: SIL Open Font License (OFL) 1.1",
+        description = "גופני הטקסט להצגת שמות ערים, רחובות ותחנות בעברית ובאנגלית על גבי המפה."
+    ),
+    CreditEntry(
+        title = "AndroidX, Jetpack Compose, Kotlin & תלויות תשתית",
+        license = "רישיון: Apache License 2.0 / MIT / BSD",
+        description = "כולל Jetpack Compose, Material 3, AndroidX, Kotlin, Kotlinx Coroutines, JTS Topology Suite, Gson, HPPC, Jackson ו-SLF4J."
+    )
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
@@ -48,6 +92,61 @@ fun SettingsScreen(
 
     var transferSliderValue by remember { mutableFloatStateOf(maxTransfers.toFloat()) }
     var bufferSliderValue by remember { mutableFloatStateOf(minTransferMinutes.toFloat()) }
+    var showLicensesDialog by remember { mutableStateOf(false) }
+
+    if (showLicensesDialog) {
+        AlertDialog(
+            onDismissRequest = { showLicensesDialog = false },
+            title = {
+                Text(
+                    text = "קרדיטים, מקורות מידע ורישיונות",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    APP_CREDITS_AND_LICENSES.forEachIndexed { index, item ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = item.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = item.license,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = item.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (index < APP_CREDITS_AND_LICENSES.lastIndex) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLicensesDialog = false }) {
+                    Text("סגירה")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -526,7 +625,7 @@ fun SettingsScreen(
             }
         }
 
-        // כרטיס אודות
+        // כרטיס אודות + קרדיטים ורישיונות
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -537,7 +636,7 @@ fun SettingsScreen(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "אודות האפליקציה",
@@ -554,6 +653,13 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                FilledTonalButton(
+                    onClick = { showLicensesDialog = true },
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📜 רישיונות קוד פתוח ומקורות מידע", fontSize = 12.sp)
+                }
             }
         }
 
