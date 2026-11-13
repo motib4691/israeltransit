@@ -73,6 +73,12 @@ jobs:
             "$BASE_URL/1280-1535.pbf" \
             --output "$FONT_DIR/1280-1535.pbf"
 
+          for RANGE in "256-511" "1536-1791" "8192-8447"; do
+            curl --fail --location --retry 3 \
+              "$BASE_URL/$RANGE.pbf" \
+              --output "$FONT_DIR/$RANGE.pbf" || true
+          done
+
           test -s "$FONT_DIR/0-255.pbf"
           test -s "$FONT_DIR/1280-1535.pbf"
 
