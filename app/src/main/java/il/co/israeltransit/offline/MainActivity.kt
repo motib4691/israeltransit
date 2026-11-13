@@ -256,6 +256,33 @@ fun TransitApp() {
                             onBack = { navigateHome() },
                             onOpenStopDetails = { stop ->
                                 navigateTo(AppScreen.StopSearch(initialStop = stop))
+                            },
+                            onPlanRouteFrom = { stop ->
+                                navigateTo(
+                                    AppScreen.RoutePlanner(
+                                        initialOrigin = stop,
+                                        initialDestination = null,
+                                        focusDestination = true
+                                    )
+                                )
+                            },
+                            onPlanRouteTo = { stop ->
+                                navigateTo(
+                                    AppScreen.RoutePlanner(
+                                        initialOrigin = null,
+                                        initialDestination = stop,
+                                        focusDestination = false
+                                    )
+                                )
+                            },
+                            onPlanRouteWithEndpoints = { origin, destination ->
+                                navigateTo(
+                                    AppScreen.RoutePlanner(
+                                        initialOrigin = origin,
+                                        initialDestination = destination,
+                                        focusDestination = false
+                                    )
+                                )
                             }
                         )
 
