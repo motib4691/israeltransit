@@ -49,10 +49,14 @@ import org.json.JSONArray
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import java.time.Duration
@@ -212,6 +216,22 @@ private fun getTripStopTimes(database: TransitDatabase, tripId: String): Map<Str
     return result
 }
 
+private fun loadStopCoordinatesById(database: TransitDatabase, stopId: String): Pair<Double, Double>? {
+    val db = database.openReadOnly() ?: return null
+    return try {
+        db.rawQuery(
+            "SELECT stop_lat, stop_lon FROM stops WHERE stop_id = ? LIMIT 1",
+            arrayOf(stopId)
+        ).use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0) && !cursor.isNull(1)) {
+                cursor.getDouble(0) to cursor.getDouble(1)
+            } else null
+        }
+    } finally {
+        db.close()
+    }
+}
+
 private fun loadSearchSavedRefs(context: Context): List<TransitRepository.SavedStopRef> {
     return try {
         val json = context.getSharedPreferences("saved_transit_stops", Context.MODE_PRIVATE)
@@ -307,12 +327,48 @@ fun StopSearchScreen(
     LaunchedEffect(selectedStop, departuresLimit, selectedDate, selectedTime, filterMode) {
         val stop = selectedStop
         if (stop != null) {
+            if (stop.latitude == null || stop.longitude == null) {
+                val coords = withContext(Dispatchers.IO) {
+                    loadStopCoordinatesById(database, stop.stopId)
+                }
+                if (coords != null && selectedStop?.stopId == stop.stopId) {
+                    selectedStop = stop.copy(latitude = coords.first, longitude = coords.second)
+                }
+            }
             oppositeStop = withContext(Dispatchers.IO) { repository.findOppositeStop(stop) }
             val queryTime = if (filterMode == "עכשיו") LocalDateTime.now() else LocalDateTime.of(selectedDate, selectedTime)
             departures = withContext(Dispatchers.IO) {
                 scheduleRepo.upcomingDepartures(stop.stopId, now = queryTime, limit = departuresLimit)
             }
             lines = withContext(Dispatchers.IO) { repository.getLinesForStop(stop.stopId, 100) }
+        }
+    }
+
+    fun renderStopMarkerOnMap(map: MapLibreMap, lat: Double, lon: Double) {
+        map.getStyle { style ->
+            if (!style.isFullyLoaded) return@getStyle
+            val sourceId = "single-stop-pin-source"
+            val layerId = "single-stop-pin-layer"
+            val collection = FeatureCollection.fromFeatures(
+                arrayOf(Feature.fromGeometry(Point.fromLngLat(lon, lat)))
+            )
+            val existing = style.getSource(sourceId) as? GeoJsonSource
+            if (existing != null) {
+                existing.setGeoJson(collection)
+            } else {
+                style.addSource(GeoJsonSource(sourceId, collection))
+            }
+            if (style.getLayer(layerId) == null) {
+                style.addLayer(
+                    CircleLayer(layerId, sourceId).withProperties(
+                        circleColor("#1769AA"),
+                        circleRadius(9f),
+                        circleStrokeColor("#FFFFFF"),
+                        circleStrokeWidth(3f)
+                    )
+                )
+            }
+            map.easeCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16.0), 600)
         }
     }
 
@@ -336,13 +392,20 @@ fun StopSearchScreen(
 
     if (isMapFullScreen && selectedStop != null && mapStorage.isMapAvailable()) {
         val stop = selectedStop!!
+        val lat = stop.latitude
+        val lon = stop.longitude
         Box(modifier = Modifier.fillMaxSize()) {
             OfflineMapView(
                 pmtilesFile = mapStorage.getMapFile(),
                 modifier = Modifier.fillMaxSize(),
-                initialLatitude = stop.latitude ?: 31.7683,
-                initialLongitude = stop.longitude ?: 35.2137,
-                initialZoom = 15.5
+                initialLatitude = lat ?: 31.7683,
+                initialLongitude = lon ?: 35.2137,
+                initialZoom = 16.0,
+                onMapReady = { map ->
+                    if (lat != null && lon != null) {
+                        renderStopMarkerOnMap(map, lat, lon)
+                    }
+                }
             )
             FilledTonalButton(
                 onClick = { isMapFullScreen = false },
@@ -684,8 +747,16 @@ fun StopSearchScreen(
             }
 
             if (mapStorage.isMapAvailable()) {
-                val lat = stop.latitude ?: 31.7683
-                val lon = stop.longitude ?: 35.2137
+                val lat = stop.latitude
+                val lon = stop.longitude
+                var stopMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+
+                LaunchedEffect(stopMapInstance, lat, lon) {
+                    if (stopMapInstance != null && lat != null && lon != null) {
+                        renderStopMarkerOnMap(stopMapInstance!!, lat, lon)
+                    }
+                }
+
                 Card(
                     modifier = Modifier.fillMaxWidth().height(220.dp),
                     shape = RoundedCornerShape(14.dp),
@@ -695,9 +766,15 @@ fun StopSearchScreen(
                         OfflineMapView(
                             pmtilesFile = mapStorage.getMapFile(),
                             modifier = Modifier.fillMaxSize(),
-                            initialLatitude = lat,
-                            initialLongitude = lon,
-                            initialZoom = 15.5
+                            initialLatitude = lat ?: 31.7683,
+                            initialLongitude = lon ?: 35.2137,
+                            initialZoom = 16.0,
+                            onMapReady = { map ->
+                                stopMapInstance = map
+                                if (lat != null && lon != null) {
+                                    renderStopMarkerOnMap(map, lat, lon)
+                                }
+                            }
                         )
                         FilledTonalButton(
                             onClick = { isMapFullScreen = true },
@@ -902,9 +979,98 @@ fun LineSearchScreen(
         )
     }
 
-    if (isMapFullScreen && mapStorage.isMapAvailable()) {
+    val activeVariant = variants.getOrNull(selectedVariantIndex)
+    val currentStops = activeVariant?.stops ?: emptyList()
+
+    val renderLineOnMap: (MapLibreMap) -> Unit = { map ->
+        map.getStyle { style ->
+            if (!style.isFullyLoaded) return@getStyle
+            scope.launch {
+                val stopCoordinates = withContext(Dispatchers.IO) {
+                    val db = database.openReadOnly() ?: return@withContext emptyList()
+                    try {
+                        val coords = mutableListOf<LatLng>()
+                        for (st in currentStops) {
+                            db.rawQuery("SELECT stop_lat, stop_lon FROM stops WHERE stop_id = ? LIMIT 1", arrayOf(st.stopId)).use { c ->
+                                if (c.moveToFirst() && !c.isNull(0) && !c.isNull(1)) {
+                                    coords.add(LatLng(c.getDouble(0), c.getDouble(1)))
+                                }
+                            }
+                        }
+                        coords
+                    } finally {
+                        db.close()
+                    }
+                }
+
+                if (!style.isFullyLoaded) return@launch
+
+                if (stopCoordinates.size >= 2) {
+                    val boundsBuilder = LatLngBounds.Builder()
+                    stopCoordinates.forEach { boundsBuilder.include(it) }
+                    try {
+                        map.easeCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 70), 800)
+                    } catch (_: Exception) {
+                        map.easeCamera(CameraUpdateFactory.newLatLngZoom(stopCoordinates.first(), 13.0))
+                    }
+
+                    val points = stopCoordinates.map { Point.fromLngLat(it.longitude, it.latitude) }
+                    val lineString = LineString.fromLngLats(points)
+                    val lineSourceId = "line-path-source"
+                    val lineLayerId = "line-path-layer"
+
+                    if (style.getLayer(lineLayerId) != null) style.removeLayer(lineLayerId)
+                    if (style.getSource(lineSourceId) != null) style.removeSource(lineSourceId)
+
+                    style.addSource(GeoJsonSource(lineSourceId, Feature.fromGeometry(lineString)))
+                    style.addLayer(
+                        LineLayer(lineLayerId, lineSourceId).withProperties(
+                            lineColor("#1769AA"),
+                            lineWidth(4.5f),
+                            lineCap("round"),
+                            lineJoin("round")
+                        )
+                    )
+
+                    val stopFeatures = stopCoordinates.mapIndexed { idx, coord ->
+                        val color = when (idx) {
+                            0 -> "#2E7D32"
+                            stopCoordinates.lastIndex -> "#C62828"
+                            else -> "#1976D2"
+                        }
+                        val radius = if (idx == 0 || idx == stopCoordinates.lastIndex) 7.0f else 4.5f
+                        Feature.fromGeometry(Point.fromLngLat(coord.longitude, coord.latitude)).apply {
+                            addStringProperty("stop_color", color)
+                            addNumberProperty("stop_radius", radius)
+                        }
+                    }
+
+                    val stopsSourceId = "line-stops-source"
+                    val stopsLayerId = "line-stops-layer"
+                    if (style.getLayer(stopsLayerId) != null) style.removeLayer(stopsLayerId)
+                    if (style.getSource(stopsSourceId) != null) style.removeSource(stopsSourceId)
+
+                    style.addSource(GeoJsonSource(stopsSourceId, FeatureCollection.fromFeatures(stopFeatures)))
+                    style.addLayer(
+                        CircleLayer(stopsLayerId, stopsSourceId).withProperties(
+                            circleColor(Expression.get("stop_color")),
+                            circleRadius(Expression.get("stop_radius")),
+                            circleStrokeColor("#FFFFFF"),
+                            circleStrokeWidth(1.5f)
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    if (isMapFullScreen && selectedLine != null && mapStorage.isMapAvailable()) {
         Box(modifier = Modifier.fillMaxSize()) {
-            OfflineMapView(pmtilesFile = mapStorage.getMapFile(), modifier = Modifier.fillMaxSize())
+            OfflineMapView(
+                pmtilesFile = mapStorage.getMapFile(),
+                modifier = Modifier.fillMaxSize(),
+                onMapReady = renderLineOnMap
+            )
             FilledTonalButton(
                 onClick = { isMapFullScreen = false },
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
@@ -1158,8 +1324,6 @@ fun LineSearchScreen(
             }
         } else {
             val line = selectedLine!!
-            val activeVariant = variants.getOrNull(selectedVariantIndex)
-            val currentStops = activeVariant?.stops ?: emptyList()
 
             val matchingGroup = groupedLines.firstOrNull {
                 it.forwardLine.routeId == line.routeId || it.backwardLine?.routeId == line.routeId
@@ -1171,7 +1335,7 @@ fun LineSearchScreen(
             val normOrigCity = OperatorTheme.normalizeHebrew(line.originCity)
             val normDestCity = OperatorTheme.normalizeHebrew(line.destinationCity)
             val isUrbanLine = line.originCity.isNotBlank() && line.destinationCity.isNotBlank() &&
-                    (normOrigCity == normDestCity || normOrigCity.contains(normDestCity) || normDestCity.contains(normOrigCity))
+                (normOrigCity == normDestCity || normOrigCity.contains(normDestCity) || normDestCity.contains(normOrigCity))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1397,54 +1561,11 @@ fun LineSearchScreen(
             }
 
             if (mapStorage.isMapAvailable()) {
-                val renderLineOnMap: (org.maplibre.android.maps.MapLibreMap) -> Unit = { map ->
-                    map.getStyle { style ->
-                        scope.launch {
-                            val stopCoordinates = withContext(Dispatchers.IO) {
-                                val db = database.openReadOnly() ?: return@withContext emptyList()
-                                try {
-                                    val coords = mutableListOf<LatLng>()
-                                    for (st in currentStops) {
-                                        db.rawQuery("SELECT stop_lat, stop_lon FROM stops WHERE stop_id = ? LIMIT 1", arrayOf(st.stopId)).use { c ->
-                                            if (c.moveToFirst() && !c.isNull(0) && !c.isNull(1)) {
-                                                coords.add(LatLng(c.getDouble(0), c.getDouble(1)))
-                                            }
-                                        }
-                                    }
-                                    coords
-                                } finally {
-                                    db.close()
-                                }
-                            }
+                var lineMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
 
-                            if (stopCoordinates.size >= 2) {
-                                val boundsBuilder = LatLngBounds.Builder()
-                                stopCoordinates.forEach { boundsBuilder.include(it) }
-                                try {
-                                    map.easeCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 70), 800)
-                                } catch (_: Exception) {
-                                    map.easeCamera(CameraUpdateFactory.newLatLngZoom(stopCoordinates.first(), 13.0))
-                                }
-
-                                val points = stopCoordinates.map { Point.fromLngLat(it.longitude, it.latitude) }
-                                val lineString = LineString.fromLngLats(points)
-                                val lineSourceId = "line-path-source"
-                                val lineLayerId = "line-path-layer"
-
-                                if (style.getLayer(lineLayerId) != null) style.removeLayer(lineLayerId)
-                                if (style.getSource(lineSourceId) != null) style.removeSource(lineSourceId)
-
-                                style.addSource(GeoJsonSource(lineSourceId, Feature.fromGeometry(lineString)))
-                                style.addLayer(
-                                    LineLayer(lineLayerId, lineSourceId).withProperties(
-                                        lineColor("#1769AA"),
-                                        lineWidth(4.5f),
-                                        lineCap("round"),
-                                        lineJoin("round")
-                                    )
-                                )
-                            }
-                        }
+                LaunchedEffect(lineMapInstance, currentStops) {
+                    if (lineMapInstance != null && currentStops.size >= 2) {
+                        renderLineOnMap(lineMapInstance!!)
                     }
                 }
 
@@ -1457,7 +1578,10 @@ fun LineSearchScreen(
                         OfflineMapView(
                             pmtilesFile = mapStorage.getMapFile(),
                             modifier = Modifier.fillMaxSize(),
-                            onMapReady = renderLineOnMap
+                            onMapReady = { map ->
+                                lineMapInstance = map
+                                renderLineOnMap(map)
+                            }
                         )
                         FilledTonalButton(
                             onClick = { isMapFullScreen = true },
