@@ -34,7 +34,8 @@ fun OfflineMapScreen(
     onBack: () -> Unit,
     onOpenStopDetails: ((TransitRepository.TransitStop) -> Unit)? = null,
     onPlanRouteFrom: ((TransitRepository.TransitStop) -> Unit)? = null,
-    onPlanRouteTo: ((TransitRepository.TransitStop) -> Unit)? = null
+    onPlanRouteTo: ((TransitRepository.TransitStop) -> Unit)? = null,
+    onPlanRouteWithEndpoints: ((TransitRepository.TransitStop, TransitRepository.TransitStop) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val mapStorage = remember(context) { OfflineMapStorage(context) }
@@ -76,6 +77,7 @@ fun OfflineMapScreen(
             modifier = Modifier.fillMaxSize(),
             onPlanRouteFrom = onPlanRouteFrom,
             onPlanRouteTo = onPlanRouteTo,
+            onPlanRouteWithEndpoints = onPlanRouteWithEndpoints,
             onOpenStopDetails = onOpenStopDetails,
             onBack = onBack,
             showSearchBar = true,
