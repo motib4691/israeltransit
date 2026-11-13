@@ -241,7 +241,9 @@ fun RoutePlannerScreen(
 
     LaunchedEffect(Unit) {
         delay(250)
-        if (focusDestinationInitially || initialOrigin != null) {
+        if (initialOrigin != null && initialDestination != null) {
+            keyboardController?.hide()
+        } else if (focusDestinationInitially || initialOrigin != null) {
             destFocusRequester.requestFocus()
             scrollState.animateScrollTo(260)
         } else {
@@ -397,62 +399,47 @@ fun RoutePlannerScreen(
         }
     }
 
-    // בחירת תחנה או נקודה על המפה
+    // בחירת תחנה או נקודה על המפה (הודעת ההוראות מופיעה למעלה ולא מסתירה את האישור בתחתית)
     if (pickingOnMapForField != null) {
         if (!mapStorage.isMapAvailable()) {
             pickingOnMapForField = null
             showMapNotInstalledDialog = true
         } else {
             val targetField = pickingOnMapForField
-            Box(modifier = Modifier.fillMaxSize()) {
-                TransitMapScreen(
-                    pmtilesFile = mapStorage.getMapFile(),
-                    modifier = Modifier.fillMaxSize(),
-                    onPlanRouteFrom = if (targetField == "origin") {
-                        { picked ->
-                            selectedOrigin = picked
-                            originQuery = picked.name
-                            originStopResults = emptyList()
-                            originAddressResults = emptyList()
-                            pickingOnMapForField = null
-                            activeField = "destination"
-                            routeResult = null
-                        }
-                    } else null,
-                    onPlanRouteTo = if (targetField == "destination") {
-                        { picked ->
-                            selectedDestination = picked
-                            destinationQuery = picked.name
-                            destinationStopResults = emptyList()
-                            destinationAddressResults = emptyList()
-                            pickingOnMapForField = null
-                            routeResult = null
-                        }
-                    } else null,
-                    onBack = { pickingOnMapForField = null },
-                    showSearchBar = true
-                )
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                    shadowElevation = 4.dp
-                ) {
-                    Text(
-                        text = if (targetField == "origin") {
-                            "בחר תחנה או לחץ לחיצה ארוכה לבחירת מוצא מהמפה"
-                        } else {
-                            "בחר תחנה או לחץ לחיצה ארוכה לבחירת יעד מהמפה"
-                        },
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                    )
-                }
+            val bannerMsg = if (targetField == "origin") {
+                "בחר תחנה או לחץ לחיצה ארוכה על נקודה כדי להגדיר מוצא"
+            } else {
+                "בחר תחנה או לחץ לחיצה ארוכה על נקודה כדי להגדיר יעד"
             }
+
+            TransitMapScreen(
+                pmtilesFile = mapStorage.getMapFile(),
+                modifier = Modifier.fillMaxSize(),
+                onPlanRouteFrom = if (targetField == "origin") {
+                    { picked ->
+                        selectedOrigin = picked
+                        originQuery = picked.name
+                        originStopResults = emptyList()
+                        originAddressResults = emptyList()
+                        pickingOnMapForField = null
+                        activeField = "destination"
+                        routeResult = null
+                    }
+                } else null,
+                onPlanRouteTo = if (targetField == "destination") {
+                    { picked ->
+                        selectedDestination = picked
+                        destinationQuery = picked.name
+                        destinationStopResults = emptyList()
+                        destinationAddressResults = emptyList()
+                        pickingOnMapForField = null
+                        routeResult = null
+                    }
+                } else null,
+                onBack = { pickingOnMapForField = null },
+                showSearchBar = true,
+                topBannerMessage = bannerMsg
+            )
             return
         }
     }
