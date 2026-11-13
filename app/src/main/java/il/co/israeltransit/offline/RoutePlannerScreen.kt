@@ -35,12 +35,17 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import il.co.israeltransit.offline.database.TransitDatabase
 import il.co.israeltransit.offline.database.TransitRepository
+import il.co.israeltransit.offline.maps.AddressSearchRepository
 import il.co.israeltransit.offline.maps.OfflineMapStorage
 import il.co.israeltransit.offline.maps.OfflineMapView
+import il.co.israeltransit.offline.maps.TransitMapScreen
 import il.co.israeltransit.offline.maps.TransitMyLocationControl
 import il.co.israeltransit.offline.routing.FareCalculator
 import il.co.israeltransit.offline.routing.FareResult
+import il.co.israeltransit.offline.routing.GraphHopperWalkingRouter
 import il.co.israeltransit.offline.routing.TransitRouteEngine
+import il.co.israeltransit.offline.routing.WalkingRoute
+import il.co.israeltransit.offline.routing.WalkingRouteResult
 import il.co.israeltransit.offline.schedule.TransitScheduleRepository
 import il.co.israeltransit.offline.ui.TransitLineBadge
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +56,7 @@ import org.json.JSONArray
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -101,6 +107,40 @@ private fun loadPlannerSavedStops(context: Context): List<PlannerSavedStop> {
     }
 }
 
+private fun toRouteEndpoint(stop: TransitRepository.TransitStop): TransitRouteEngine.RouteEndpoint {
+    return if (stop.stopId.startsWith("coord:") && stop.latitude != null && stop.longitude != null) {
+        TransitRouteEngine.RouteEndpoint.Location(
+            name = stop.name,
+            latitude = stop.latitude,
+            longitude = stop.longitude
+        )
+    } else {
+        TransitRouteEngine.RouteEndpoint.Stop(
+            stopId = stop.stopId,
+            name = stop.name
+        )
+    }
+}
+
+private fun addressToSyntheticStop(addr: AddressSearchRepository.AddressResult): TransitRepository.TransitStop {
+    val label = if (
+        addr.subtitle.isNotBlank() &&
+        !addr.subtitle.startsWith("עיר") &&
+        !addr.title.contains(addr.subtitle.removePrefix("רחוב • "))
+    ) {
+        "${addr.title}, ${addr.subtitle.removePrefix("רחוב • ")}"
+    } else {
+        addr.title
+    }
+    return TransitRepository.TransitStop(
+        stopId = "coord:${addr.latitude},${addr.longitude}",
+        name = label,
+        latitude = addr.latitude,
+        longitude = addr.longitude,
+        stopCode = ""
+    )
+}
+
 private val plannerTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
@@ -117,7 +157,9 @@ fun RoutePlannerScreen(
 
     val database = remember(context) { TransitDatabase(context) }
     val repository = remember(database) { TransitRepository(database) }
-    val routeEngine = remember(database) { TransitRouteEngine(database) }
+    val addressRepository = remember(context) { AddressSearchRepository(context) }
+    val walkingRouter = remember(context) { GraphHopperWalkingRouter(context) }
+    val routeEngine = remember(database, walkingRouter) { TransitRouteEngine(database, walkingRouter) }
     val scheduleRepo = remember(database) { TransitScheduleRepository(database) }
     val mapStorage = remember(context) { OfflineMapStorage(context) }
     val settings = remember(context) { TransitSettings(context) }
@@ -140,8 +182,10 @@ fun RoutePlannerScreen(
     var originQuery by remember { mutableStateOf(initialOrigin?.name.orEmpty()) }
     var destinationQuery by remember { mutableStateOf(initialDestination?.name.orEmpty()) }
 
-    var originResults by remember { mutableStateOf(emptyList<TransitRepository.DualStopGroup>()) }
-    var destinationResults by remember { mutableStateOf(emptyList<TransitRepository.DualStopGroup>()) }
+    var originStopResults by remember { mutableStateOf(emptyList<TransitRepository.DualStopGroup>()) }
+    var originAddressResults by remember { mutableStateOf(emptyList<AddressSearchRepository.AddressResult>()) }
+    var destinationStopResults by remember { mutableStateOf(emptyList<TransitRepository.DualStopGroup>()) }
+    var destinationAddressResults by remember { mutableStateOf(emptyList<AddressSearchRepository.AddressResult>()) }
 
     var selectedOrigin by remember { mutableStateOf(initialOrigin) }
     var selectedDestination by remember { mutableStateOf(initialDestination) }
@@ -181,8 +225,8 @@ fun RoutePlannerScreen(
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 routeEngine.findJourneys(
-                    originStopId = origin.stopId,
-                    destinationStopId = destination.stopId,
+                    origin = toRouteEndpoint(origin),
+                    destination = toRouteEndpoint(destination),
                     departureTime = departureTime,
                     maxTransfers = settings.maxTransfers,
                     minimumTransferMinutes = settings.minTransferMinutes.toLong(),
@@ -219,7 +263,8 @@ fun RoutePlannerScreen(
                 if (nearest != null) {
                     selectedOrigin = nearest
                     originQuery = nearest.name
-                    originResults = emptyList()
+                    originStopResults = emptyList()
+                    originAddressResults = emptyList()
                     activeField = "destination"
                     routeResult = null
                     Toast.makeText(
@@ -230,16 +275,28 @@ fun RoutePlannerScreen(
                     destFocusRequester.requestFocus()
                     scrollState.animateScrollTo(260)
                 } else {
-                    Toast.makeText(
-                        context,
-                        "לא נמצאו תחנות בקרבת מיקומך.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    val label = withContext(Dispatchers.IO) {
+                        addressRepository.findNearestPlaceLabel(loc.latitude, loc.longitude)
+                    } ?: "המיקום הנוכחי שלי"
+                    selectedOrigin = TransitRepository.TransitStop(
+                        stopId = "coord:${loc.latitude},${loc.longitude}",
+                        name = label,
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        stopCode = ""
+                    )
+                    originQuery = label
+                    originStopResults = emptyList()
+                    originAddressResults = emptyList()
+                    activeField = "destination"
+                    routeResult = null
+                    destFocusRequester.requestFocus()
+                    scrollState.animateScrollTo(260)
                 }
             }.onFailure {
                 Toast.makeText(
                     context,
-                    "לא ניתן לקבל מיקום כעת. באפשרותך לבחור תחנה ידנית.",
+                    "לא ניתן לקבל מיקום כעת. באפשרותך לבחור תחנה או כתובת ידנית.",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -257,7 +314,7 @@ fun RoutePlannerScreen(
         } else {
             Toast.makeText(
                 context,
-                "לא ניתנה הרשאת מיקום. באפשרותך לבחור תחנה ידנית.",
+                "לא ניתנה הרשאת מיקום. באפשרותך לבחור תחנה או כתובת ידנית.",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -267,13 +324,15 @@ fun RoutePlannerScreen(
         if (initialOrigin != null) {
             selectedOrigin = initialOrigin
             originQuery = initialOrigin.name
-            originResults = emptyList()
+            originStopResults = emptyList()
+            originAddressResults = emptyList()
             activeField = "destination"
         }
         if (initialDestination != null) {
             selectedDestination = initialDestination
             destinationQuery = initialDestination.name
-            destinationResults = emptyList()
+            destinationStopResults = emptyList()
+            destinationAddressResults = emptyList()
         }
         if (initialOrigin != null || initialDestination != null) {
             routeResult = null
@@ -281,34 +340,42 @@ fun RoutePlannerScreen(
         }
     }
 
-    // חיפוש מוצא - לא מקפיץ הצעה אם התחנה כבר נבחרה
+    // חיפוש מוצא משולב (כתובות + תחנות)
     LaunchedEffect(originQuery, activeField) {
         if (activeField != "origin") return@LaunchedEffect
         val value = originQuery.trim()
         if (value.isEmpty() || (selectedOrigin != null && value == selectedOrigin?.name)) {
-            originResults = emptyList()
+            originStopResults = emptyList()
+            originAddressResults = emptyList()
         } else {
             delay(200)
             searching = true
-            originResults = withContext(Dispatchers.IO) {
-                repository.searchGroupedStops(value, 30, savedRefs)
+            val (stops, addrs) = withContext(Dispatchers.IO) {
+                repository.searchGroupedStops(value, 20, savedRefs) to
+                    addressRepository.search(value, 15)
             }
+            originStopResults = stops
+            originAddressResults = addrs
             searching = false
         }
     }
 
-    // חיפוש יעד - לא מקפיץ הצעה אם התחנה כבר נבחרה
+    // חיפוש יעד משולב (כתובות + תחנות)
     LaunchedEffect(destinationQuery, activeField) {
         if (activeField != "destination") return@LaunchedEffect
         val value = destinationQuery.trim()
         if (value.isEmpty() || (selectedDestination != null && value == selectedDestination?.name)) {
-            destinationResults = emptyList()
+            destinationStopResults = emptyList()
+            destinationAddressResults = emptyList()
         } else {
             delay(200)
             searching = true
-            destinationResults = withContext(Dispatchers.IO) {
-                repository.searchGroupedStops(value, 30, savedRefs)
+            val (stops, addrs) = withContext(Dispatchers.IO) {
+                repository.searchGroupedStops(value, 20, savedRefs) to
+                    addressRepository.search(value, 15)
             }
+            destinationStopResults = stops
+            destinationAddressResults = addrs
             searching = false
         }
     }
@@ -330,46 +397,60 @@ fun RoutePlannerScreen(
         }
     }
 
-    // בחירת תחנה על המפה
+    // בחירת תחנה או נקודה על המפה
     if (pickingOnMapForField != null) {
         if (!mapStorage.isMapAvailable()) {
             pickingOnMapForField = null
             showMapNotInstalledDialog = true
         } else {
+            val targetField = pickingOnMapForField
             Box(modifier = Modifier.fillMaxSize()) {
-                OfflineMapView(
+                TransitMapScreen(
                     pmtilesFile = mapStorage.getMapFile(),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    onPlanRouteFrom = if (targetField == "origin") {
+                        { picked ->
+                            selectedOrigin = picked
+                            originQuery = picked.name
+                            originStopResults = emptyList()
+                            originAddressResults = emptyList()
+                            pickingOnMapForField = null
+                            activeField = "destination"
+                            routeResult = null
+                        }
+                    } else null,
+                    onPlanRouteTo = if (targetField == "destination") {
+                        { picked ->
+                            selectedDestination = picked
+                            destinationQuery = picked.name
+                            destinationStopResults = emptyList()
+                            destinationAddressResults = emptyList()
+                            pickingOnMapForField = null
+                            routeResult = null
+                        }
+                    } else null,
+                    onBack = { pickingOnMapForField = null },
+                    showSearchBar = true
                 )
+
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .align(Alignment.TopCenter),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    shadowElevation = 6.dp
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    shadowElevation = 4.dp
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (pickingOnMapForField == "origin") "בחר תחנת מוצא על המפה" else "בחר תחנת יעד על המפה",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { pickingOnMapForField = null },
-                            shape = RoundedCornerShape(16.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
-                        ) {
-                            Text("ביטול", fontSize = 12.sp)
-                        }
-                    }
+                    Text(
+                        text = if (targetField == "origin") {
+                            "בחר תחנה או לחץ לחיצה ארוכה לבחירת מוצא מהמפה"
+                        } else {
+                            "בחר תחנה או לחץ לחיצה ארוכה לבחירת יעד מהמפה"
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
                 }
             }
             return
@@ -404,8 +485,8 @@ fun RoutePlannerScreen(
     if (detailedJourney != null) {
         val journey = detailedJourney!!
         val firstLeg = journey.legs.firstOrNull()
-        val initialLat = firstLeg?.fromLat ?: 31.7683
-        val initialLon = firstLeg?.fromLon ?: 35.2137
+        val initialLat = journey.initialWalk?.fromLat ?: firstLeg?.fromLat ?: 31.7683
+        val initialLon = journey.initialWalk?.fromLon ?: firstLeg?.fromLon ?: 35.2137
         val mapFile: File = mapStorage.getMapFile()
 
         val totalMeters = journey.legs.sumOf { leg ->
@@ -416,72 +497,237 @@ fun RoutePlannerScreen(
             FareCalculator.calculateFare(totalMeters, isTrain, journey.durationMinutes)
         }
 
-        val renderJourneyOnMap: (org.maplibre.android.maps.MapLibreMap) -> Unit = { map ->
-            map.getStyle { style ->
-                val validCoords = buildList {
-                    journey.legs.forEach { leg ->
-                        if (leg.fromLat != null && leg.fromLon != null) add(LatLng(leg.fromLat, leg.fromLon))
-                        if (leg.toLat != null && leg.toLon != null) add(LatLng(leg.toLat, leg.toLon))
+        // חישוב מסלולי ההליכה האמיתיים מ-GraphHopper עבור כל קטעי ההליכה במסלול
+        var walkingRoutesMap by remember(journey) { mutableStateOf<Map<String, WalkingRoute>>(emptyMap()) }
+        var journeyMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+
+        LaunchedEffect(journey) {
+            val computed = withContext(Dispatchers.IO) {
+                val map = mutableMapOf<String, WalkingRoute>()
+
+                journey.initialWalk?.let { iw ->
+                    if (iw.toLat != null && iw.toLon != null) {
+                        val res = walkingRouter.findRoute(iw.fromLat, iw.fromLon, iw.toLat, iw.toLon)
+                        if (res is WalkingRouteResult.Success) {
+                            map["initial"] = res.route
+                        }
                     }
                 }
 
-                if (validCoords.isNotEmpty()) {
-                    val boundsBuilder = LatLngBounds.Builder()
-                    validCoords.forEach { boundsBuilder.include(it) }
-
-                    try {
-                        map.easeCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 100), 1000)
-                    } catch (_: Exception) {
-                        map.easeCamera(CameraUpdateFactory.newLatLngZoom(validCoords.first(), 13.0))
+                for (i in 0 until journey.legs.lastIndex) {
+                    val cur = journey.legs[i]
+                    val next = journey.legs[i + 1]
+                    if (cur.toStopId != next.fromStopId &&
+                        cur.toLat != null && cur.toLon != null &&
+                        next.fromLat != null && next.fromLon != null
+                    ) {
+                        val res = walkingRouter.findRoute(cur.toLat, cur.toLon, next.fromLat, next.fromLon)
+                        if (res is WalkingRouteResult.Success) {
+                            map["transfer_$i"] = res.route
+                        }
                     }
+                }
 
-                    val linePoints = validCoords.map { Point.fromLngLat(it.longitude, it.latitude) }
-                    if (linePoints.size >= 2) {
-                        val lineString = LineString.fromLngLats(linePoints)
-                        val lineSourceId = "journey-path-source"
-                        val lineLayerId = "journey-path-layer"
+                journey.finalWalk?.let { fw ->
+                    if (fw.fromLat != null && fw.fromLon != null && fw.toLat != null && fw.toLon != null) {
+                        val res = walkingRouter.findRoute(fw.fromLat, fw.fromLon, fw.toLat, fw.toLon)
+                        if (res is WalkingRouteResult.Success) {
+                            map["final"] = res.route
+                        }
+                    }
+                }
 
-                        if (style.getLayer(lineLayerId) != null) style.removeLayer(lineLayerId)
-                        if (style.getSource(lineSourceId) != null) style.removeSource(lineSourceId)
+                map
+            }
+            walkingRoutesMap = computed
+        }
 
-                        style.addSource(GeoJsonSource(lineSourceId, Feature.fromGeometry(lineString)))
-                        style.addLayer(
-                            LineLayer(lineLayerId, lineSourceId).withProperties(
-                                lineColor("#1769AA"),
-                                lineWidth(4.5f),
-                                lineCap("round"),
-                                lineJoin("round")
+        fun drawDetailedRouteOnMap(map: MapLibreMap, walks: Map<String, WalkingRoute>) {
+            map.getStyle { style ->
+                if (!style.isFullyLoaded) return@getStyle
+
+                val allBoundsCoords = mutableListOf<LatLng>()
+                val transitLineFeatures = mutableListOf<Feature>()
+                val walkLineFeatures = mutableListOf<Feature>()
+                val markerFeatures = mutableListOf<Feature>()
+
+                // קטע הליכה ראשוני
+                journey.initialWalk?.let { iw ->
+                    allBoundsCoords.add(LatLng(iw.fromLat, iw.fromLon))
+                    markerFeatures.add(
+                        Feature.fromGeometry(Point.fromLngLat(iw.fromLon, iw.fromLat)).apply {
+                            addStringProperty("marker_color", "#2E7D32")
+                        }
+                    )
+                    val ghWalk = walks["initial"]
+                    if (ghWalk != null && ghWalk.points.size >= 2) {
+                        val pts = ghWalk.points.map {
+                            allBoundsCoords.add(LatLng(it.latitude, it.longitude))
+                            Point.fromLngLat(it.longitude, it.latitude)
+                        }
+                        walkLineFeatures.add(Feature.fromGeometry(LineString.fromLngLats(pts)))
+                    } else if (iw.toLat != null && iw.toLon != null) {
+                        walkLineFeatures.add(
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(
+                                    listOf(
+                                        Point.fromLngLat(iw.fromLon, iw.fromLat),
+                                        Point.fromLngLat(iw.toLon, iw.toLat)
+                                    )
+                                )
                             )
                         )
                     }
+                }
 
-                    val stopFeatures = validCoords.mapIndexed { idx, coord ->
-                        val color = when (idx) {
-                            0 -> "#2E7D32"
-                            validCoords.lastIndex -> "#C62828"
-                            else -> "#EF6C00"
-                        }
-                        val f = Feature.fromGeometry(Point.fromLngLat(coord.longitude, coord.latitude))
-                        f.addStringProperty("marker_color", color)
-                        f
+                // קטעי תחבורה ציבורית והחלפות ביניהם
+                journey.legs.forEachIndexed { idx, leg ->
+                    val legPts = mutableListOf<Point>()
+                    if (leg.fromLat != null && leg.fromLon != null) {
+                        allBoundsCoords.add(LatLng(leg.fromLat, leg.fromLon))
+                        legPts.add(Point.fromLngLat(leg.fromLon, leg.fromLat))
+                        val color = if (idx == 0 && journey.initialWalk == null) "#2E7D32" else "#EF6C00"
+                        markerFeatures.add(
+                            Feature.fromGeometry(Point.fromLngLat(leg.fromLon, leg.fromLat)).apply {
+                                addStringProperty("marker_color", color)
+                            }
+                        )
+                    }
+                    if (leg.toLat != null && leg.toLon != null) {
+                        allBoundsCoords.add(LatLng(leg.toLat, leg.toLon))
+                        legPts.add(Point.fromLngLat(leg.toLon, leg.toLat))
+                        val isFinalStop = idx == journey.legs.lastIndex && journey.finalWalk == null
+                        val color = if (isFinalStop) "#C62828" else "#EF6C00"
+                        markerFeatures.add(
+                            Feature.fromGeometry(Point.fromLngLat(leg.toLon, leg.toLat)).apply {
+                                addStringProperty("marker_color", color)
+                            }
+                        )
+                    }
+                    if (legPts.size >= 2) {
+                        transitLineFeatures.add(Feature.fromGeometry(LineString.fromLngLats(legPts)))
                     }
 
-                    val stopsSourceId = "journey-stops-source"
-                    val stopsLayerId = "journey-stops-layer"
-
-                    if (style.getLayer(stopsLayerId) != null) style.removeLayer(stopsLayerId)
-                    if (style.getSource(stopsSourceId) != null) style.removeSource(stopsSourceId)
-
-                    style.addSource(GeoJsonSource(stopsSourceId, FeatureCollection.fromFeatures(stopFeatures)))
-                    style.addLayer(
-                        CircleLayer(stopsLayerId, stopsSourceId).withProperties(
-                            circleColor(Expression.get("marker_color")),
-                            circleRadius(7.5f),
-                            circleStrokeColor("#FFFFFF"),
-                            circleStrokeWidth(2.5f)
-                        )
-                    )
+                    if (idx < journey.legs.lastIndex) {
+                        val nextLeg = journey.legs[idx + 1]
+                        if (leg.toStopId != nextLeg.fromStopId) {
+                            val ghTransfer = walks["transfer_$idx"]
+                            if (ghTransfer != null && ghTransfer.points.size >= 2) {
+                                val pts = ghTransfer.points.map {
+                                    allBoundsCoords.add(LatLng(it.latitude, it.longitude))
+                                    Point.fromLngLat(it.longitude, it.latitude)
+                                }
+                                walkLineFeatures.add(Feature.fromGeometry(LineString.fromLngLats(pts)))
+                            } else if (leg.toLat != null && leg.toLon != null && nextLeg.fromLat != null && nextLeg.fromLon != null) {
+                                walkLineFeatures.add(
+                                    Feature.fromGeometry(
+                                        LineString.fromLngLats(
+                                            listOf(
+                                                Point.fromLngLat(leg.toLon, leg.toLat),
+                                                Point.fromLngLat(nextLeg.fromLon, nextLeg.fromLat)
+                                            )
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
+
+                // קטע הליכה מסכם
+                journey.finalWalk?.let { fw ->
+                    if (fw.toLat != null && fw.toLon != null) {
+                        allBoundsCoords.add(LatLng(fw.toLat, fw.toLon))
+                        markerFeatures.add(
+                            Feature.fromGeometry(Point.fromLngLat(fw.toLon, fw.toLat)).apply {
+                                addStringProperty("marker_color", "#C62828")
+                            }
+                        )
+                    }
+                    val ghFinal = walks["final"]
+                    if (ghFinal != null && ghFinal.points.size >= 2) {
+                        val pts = ghFinal.points.map {
+                            allBoundsCoords.add(LatLng(it.latitude, it.longitude))
+                            Point.fromLngLat(it.longitude, it.latitude)
+                        }
+                        walkLineFeatures.add(Feature.fromGeometry(LineString.fromLngLats(pts)))
+                    } else if (fw.fromLat != null && fw.fromLon != null && fw.toLat != null && fw.toLon != null) {
+                        walkLineFeatures.add(
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(
+                                    listOf(
+                                        Point.fromLngLat(fw.fromLon, fw.fromLat),
+                                        Point.fromLngLat(fw.toLon, fw.toLat)
+                                    )
+                                )
+                            )
+                        )
+                    }
+                }
+
+                if (allBoundsCoords.size >= 2) {
+                    val boundsBuilder = LatLngBounds.Builder()
+                    allBoundsCoords.forEach { boundsBuilder.include(it) }
+                    try {
+                        map.easeCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 90), 900)
+                    } catch (_: Exception) {
+                        map.easeCamera(CameraUpdateFactory.newLatLngZoom(allBoundsCoords.first(), 13.5))
+                    }
+                } else if (allBoundsCoords.size == 1) {
+                    map.easeCamera(CameraUpdateFactory.newLatLngZoom(allBoundsCoords.first(), 14.5))
+                }
+
+                // שכבת נסיעה (כחול מלא)
+                val transitSourceId = "journey-path-source"
+                val transitLayerId = "journey-path-layer"
+                if (style.getLayer(transitLayerId) != null) style.removeLayer(transitLayerId)
+                if (style.getSource(transitSourceId) != null) style.removeSource(transitSourceId)
+                style.addSource(GeoJsonSource(transitSourceId, FeatureCollection.fromFeatures(transitLineFeatures)))
+                style.addLayer(
+                    LineLayer(transitLayerId, transitSourceId).withProperties(
+                        lineColor("#1769AA"),
+                        lineWidth(4.5f),
+                        lineCap("round"),
+                        lineJoin("round")
+                    )
+                )
+
+                // שכבת הליכה (ירוק מקווקו לפי שבילים)
+                val walkSourceId = "journey-walk-source"
+                val walkLayerId = "journey-walk-layer"
+                if (style.getLayer(walkLayerId) != null) style.removeLayer(walkLayerId)
+                if (style.getSource(walkSourceId) != null) style.removeSource(walkSourceId)
+                style.addSource(GeoJsonSource(walkSourceId, FeatureCollection.fromFeatures(walkLineFeatures)))
+                style.addLayer(
+                    LineLayer(walkLayerId, walkSourceId).withProperties(
+                        lineColor("#2E7D32"),
+                        lineWidth(4.0f),
+                        lineCap("round"),
+                        lineJoin("round"),
+                        lineDasharray(arrayOf(2.0f, 1.8f))
+                    )
+                )
+
+                // שכבת נקודות עצירה ויעדים
+                val stopsSourceId = "journey-stops-source"
+                val stopsLayerId = "journey-stops-layer"
+                if (style.getLayer(stopsLayerId) != null) style.removeLayer(stopsLayerId)
+                if (style.getSource(stopsSourceId) != null) style.removeSource(stopsSourceId)
+                style.addSource(GeoJsonSource(stopsSourceId, FeatureCollection.fromFeatures(markerFeatures)))
+                style.addLayer(
+                    CircleLayer(stopsLayerId, stopsSourceId).withProperties(
+                        circleColor(Expression.get("marker_color")),
+                        circleRadius(7.5f),
+                        circleStrokeColor("#FFFFFF"),
+                        circleStrokeWidth(2.5f)
+                    )
+                )
+            }
+        }
+
+        LaunchedEffect(journeyMapInstance, walkingRoutesMap, detailedJourney) {
+            journeyMapInstance?.let { map ->
+                drawDetailedRouteOnMap(map, walkingRoutesMap)
             }
         }
 
@@ -493,7 +739,10 @@ fun RoutePlannerScreen(
                     initialLatitude = initialLat,
                     initialLongitude = initialLon,
                     initialZoom = 13.0,
-                    onMapReady = renderJourneyOnMap
+                    onMapReady = { map ->
+                        journeyMapInstance = map
+                        drawDetailedRouteOnMap(map, walkingRoutesMap)
+                    }
                 )
                 FilledTonalButton(
                     onClick = { isMapFullScreen = false },
@@ -546,13 +795,31 @@ fun RoutePlannerScreen(
                         val summary = buildString {
                             append("פירוט מסלול נסיעה:\n")
                             append("יציאה: ${journey.departureAt.format(plannerTimeFormatter)} | הגעה: ${journey.arrivalAt.format(plannerTimeFormatter)} (${journey.durationMinutes} דק')\n\n")
+                            journey.initialWalk?.let { iw ->
+                                val dist = walkingRoutesMap["initial"]?.distanceMeters?.roundToInt() ?: iw.distanceMeters.roundToInt()
+                                append("הליכה לתחנה: מ-${iw.fromName} אל ${iw.toStopName} (כ-$dist מ', ${iw.walkMinutes} דק')\n")
+                                walkingRoutesMap["initial"]?.instructions?.forEach { inst ->
+                                    append("  • ${inst.text} (${inst.distanceMeters.roundToInt()} מ')\n")
+                                }
+                                append("\n")
+                            }
                             journey.legs.forEachIndexed { i, leg ->
                                 append("${i + 1}. קו ${leg.lineNumber} (${leg.agencyName})\n")
                                 append("   עליה: ${leg.fromStopName} בשעה ${leg.departureAt.format(plannerTimeFormatter)}\n")
                                 append("   ירידה: ${leg.toStopName} בשעה ${leg.arrivalAt.format(plannerTimeFormatter)}\n")
+                                walkingRoutesMap["transfer_$i"]?.let { tr ->
+                                    append("   הליכה להחלפה (${tr.distanceMeters.roundToInt()} מ'):\n")
+                                    tr.instructions.forEach { inst ->
+                                        append("     • ${inst.text} (${inst.distanceMeters.roundToInt()} מ')\n")
+                                    }
+                                }
                             }
-                            journey.finalWalk?.let {
-                                append("הליכה מסכמת ליעד: כ-${it.distanceMeters.roundToInt()} מ' (${it.walkMinutes} דק') אל ${it.toStopName}\n")
+                            journey.finalWalk?.let { fw ->
+                                val dist = walkingRoutesMap["final"]?.distanceMeters?.roundToInt() ?: fw.distanceMeters.roundToInt()
+                                append("הליכה מסכמת ליעד: כ-$dist מ' (${fw.walkMinutes} דק') אל ${fw.toStopName}\n")
+                                walkingRoutesMap["final"]?.instructions?.forEach { inst ->
+                                    append("  • ${inst.text} (${inst.distanceMeters.roundToInt()} מ')\n")
+                                }
                             }
                         }
                         clipboardManager.setText(AnnotatedString(summary))
@@ -568,6 +835,57 @@ fun RoutePlannerScreen(
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Text("💳 תעריף: ${fare.priceNis} ₪", fontSize = 12.sp)
+                }
+            }
+
+            // הליכה ראשונית מכתובת המוצא לתחנת העלייה
+            journey.initialWalk?.let { iw ->
+                var showInitWalkDetails by remember { mutableStateOf(true) }
+                val ghWalk = walkingRoutesMap["initial"]
+                val distMeters = ghWalk?.distanceMeters?.roundToInt() ?: iw.distanceMeters.roundToInt()
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showInitWalkDetails = !showInitWalkDetails },
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "🚶 הליכה אל תחנת העלייה (${iw.toStopName})",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Text(if (showInitWalkDetails) "▲" else "▼", fontSize = 11.sp)
+                        }
+                        Text(
+                            "מ־${iw.fromName} אל ${iw.toStopName} • כ-$distMeters מ' (כ-${iw.walkMinutes} דק')",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        AnimatedVisibility(visible = showInitWalkDetails && ghWalk != null && ghWalk.instructions.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.padding(top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                ghWalk?.instructions?.forEachIndexed { idx, inst ->
+                                    val distSuffix = if (inst.distanceMeters >= 5) " (${inst.distanceMeters.roundToInt()} מ')" else ""
+                                    Text(
+                                        "${idx + 1}. ${inst.text}$distSuffix",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -666,6 +984,7 @@ fun RoutePlannerScreen(
                     val waitMinutes = Duration.between(leg.arrivalAt, nextLeg.departureAt).toMinutes()
                     val sameStop = leg.toStopId == nextLeg.fromStopId
                     var showWalkingDetails by remember { mutableStateOf(false) }
+                    val ghTransfer = walkingRoutesMap["transfer_$legIdx"]
 
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -677,20 +996,37 @@ fun RoutePlannerScreen(
                                 Text("החלפה באותה תחנה (${leg.toStopName})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 Text("המתנה לקו ${nextLeg.lineNumber}: כ-${waitMinutes} דקות", style = MaterialTheme.typography.bodySmall)
                             } else {
+                                val transferDist = ghTransfer?.distanceMeters?.roundToInt()
+                                val distText = if (transferDist != null) " (כ-$transferDist מ')" else ""
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { showWalkingDetails = !showWalkingDetails },
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("🚶 הליכה בין תחנות ההחלפה ➔ לחץ להוראות", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                                    Text(
+                                        "🚶 הליכה בין תחנות ההחלפה$distText ➔ לחץ להוראות",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
                                     Text(if (showWalkingDetails) "▲" else "▼", fontSize = 11.sp)
                                 }
                                 AnimatedVisibility(visible = showWalkingDetails) {
-                                    Column(modifier = Modifier.padding(top = 4.dp)) {
-                                        Text("1. צא מ-${leg.toStopName} והתקדם ברגל ברחוב", style = MaterialTheme.typography.bodySmall)
-                                        Text("2. עבור את מעבר החצייה במידת הצורך", style = MaterialTheme.typography.bodySmall)
-                                        Text("3. הגע לרציף תחנת ${nextLeg.fromStopName}", style = MaterialTheme.typography.bodySmall)
+                                    Column(
+                                        modifier = Modifier.padding(top = 4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        if (ghTransfer != null && ghTransfer.instructions.isNotEmpty()) {
+                                            ghTransfer.instructions.forEachIndexed { idx, inst ->
+                                                val d = if (inst.distanceMeters >= 5) " (${inst.distanceMeters.roundToInt()} מ')" else ""
+                                                Text("${idx + 1}. ${inst.text}$d", style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        } else {
+                                            Text("1. צא מ-${leg.toStopName} והתקדם ברגל ברחוב", style = MaterialTheme.typography.bodySmall)
+                                            Text("2. עבור את מעבר החצייה במידת הצורך", style = MaterialTheme.typography.bodySmall)
+                                            Text("3. הגע לרציף תחנת ${nextLeg.fromStopName}", style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
                                 }
                                 Text("המתנה משוערת לקו ${nextLeg.lineNumber}: כ-${waitMinutes} דקות", style = MaterialTheme.typography.bodySmall)
@@ -701,14 +1037,45 @@ fun RoutePlannerScreen(
             }
 
             journey.finalWalk?.let { walk ->
+                var showFinalWalkDetails by remember { mutableStateOf(true) }
+                val ghFinal = walkingRoutesMap["final"]
+                val distMeters = ghFinal?.distanceMeters?.roundToInt() ?: walk.distanceMeters.roundToInt()
+
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("🚶 הליכה מסכמת אל היעד", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Text("כ-${walk.distanceMeters.roundToInt()} מטרים (כ-${walk.walkMinutes} דקות) מ־${walk.fromStopName} אל ${walk.toStopName}", style = MaterialTheme.typography.bodySmall)
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showFinalWalkDetails = !showFinalWalkDetails },
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("🚶 הליכה מסכמת אל היעד", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            if (ghFinal != null && ghFinal.instructions.isNotEmpty()) {
+                                Text(if (showFinalWalkDetails) "▲" else "▼", fontSize = 11.sp)
+                            }
+                        }
+                        Text(
+                            "כ-$distMeters מטרים (כ-${walk.walkMinutes} דקות) מ־${walk.fromStopName} אל ${walk.toStopName}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        AnimatedVisibility(visible = showFinalWalkDetails && ghFinal != null && ghFinal.instructions.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.padding(top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                ghFinal?.instructions?.forEachIndexed { idx, inst ->
+                                    val d = if (inst.distanceMeters >= 5) " (${inst.distanceMeters.roundToInt()} מ')" else ""
+                                    Text("${idx + 1}. ${inst.text}$d", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -727,7 +1094,10 @@ fun RoutePlannerScreen(
                             initialLatitude = initialLat,
                             initialLongitude = initialLon,
                             initialZoom = 13.0,
-                            onMapReady = renderJourneyOnMap
+                            onMapReady = { map ->
+                                journeyMapInstance = map
+                                drawDetailedRouteOnMap(map, walkingRoutesMap)
+                            }
                         )
                         FilledTonalButton(
                             onClick = { isMapFullScreen = true },
@@ -750,7 +1120,7 @@ fun RoutePlannerScreen(
             onDismissRequest = { showMapNotInstalledDialog = false },
             title = { Text("מפה לא מותקנת") },
             text = {
-                Text("קובץ המפה לא הותקן עדיין במכשיר.\nתכנון הנסיעה וזמני היציאה פועלים ומוצגים במלואם גם ללא מפה.")
+                Text("חבילת המפה לא הותקנה עדיין במכשיר.\nתכנון הנסיעה בין תחנות וזמני היציאה פועלים גם ללא מפה.")
             },
             confirmButton = {
                 TextButton(onClick = { showMapNotInstalledDialog = false }) { Text("הבנתי") }
@@ -838,7 +1208,7 @@ fun RoutePlannerScreen(
                             .weight(1f)
                             .focusRequester(originFocusRequester)
                             .onFocusChanged { if (it.isFocused) activeField = "origin" },
-                        label = { Text("הקלד מוצא (שם/מספר תחנה או כתובת)", fontSize = 12.sp) },
+                        label = { Text("הקלד מוצא (שם רחוב/כתובת או תחנה)", fontSize = 12.sp) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
@@ -863,16 +1233,54 @@ fun RoutePlannerScreen(
                     }
                 }
 
-                // תוצאות חיפוש מוצא
-                if (activeField == "origin" && originResults.isNotEmpty()) {
-                    originResults.take(6).forEach { group ->
+                // תוצאות חיפוש מוצא (רחובות/כתובות + תחנות)
+                if (activeField == "origin" && (originAddressResults.isNotEmpty() || originStopResults.isNotEmpty())) {
+                    originAddressResults.take(5).forEach { addr ->
+                        val synthetic = addressToSyntheticStop(addr)
+                        val icon = when (addr.kind) {
+                            AddressSearchRepository.ResultKind.CITY,
+                            AddressSearchRepository.ResultKind.PLACE -> "🏙️"
+                            AddressSearchRepository.ResultKind.STREET -> "🛣️"
+                            AddressSearchRepository.ResultKind.ADDRESS -> "📍"
+                        }
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedOrigin = synthetic
+                                    originQuery = synthetic.name
+                                    originStopResults = emptyList()
+                                    originAddressResults = emptyList()
+                                    activeField = "destination"
+                                    destFocusRequester.requestFocus()
+                                    scope.launch { scrollState.animateScrollTo(260) }
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(icon, fontSize = 16.sp)
+                                Column {
+                                    Text(addr.title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(addr.subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+
+                    originStopResults.take(5).forEach { group ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
                                     selectedOrigin = group.stop1
                                     originQuery = group.baseName
-                                    originResults = emptyList()
+                                    originStopResults = emptyList()
+                                    originAddressResults = emptyList()
                                     activeField = "destination"
                                     destFocusRequester.requestFocus()
                                     scope.launch { scrollState.animateScrollTo(260) }
@@ -885,7 +1293,7 @@ fun RoutePlannerScreen(
                                     Text("⭐ ${group.customName}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                                     Text(group.baseName, fontSize = 12.sp)
                                 } else {
-                                    Text(group.baseName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("🚏 ${group.baseName}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 if (group.stop2 != null) {
@@ -920,8 +1328,10 @@ fun RoutePlannerScreen(
                             selectedDestination = oldOrig
                             destinationQuery = oldOrigQ
 
-                            originResults = emptyList()
-                            destinationResults = emptyList()
+                            originStopResults = emptyList()
+                            originAddressResults = emptyList()
+                            destinationStopResults = emptyList()
+                            destinationAddressResults = emptyList()
                             routeResult = null
 
                             if (selectedOrigin != null && selectedDestination != null && selectedOrigin?.stopId != selectedDestination?.stopId) {
@@ -969,7 +1379,7 @@ fun RoutePlannerScreen(
                                     scope.launch { scrollState.animateScrollTo(260) }
                                 }
                             },
-                        label = { Text("הקלד יעד (שם/מספר תחנה או כתובת)", fontSize = 12.sp) },
+                        label = { Text("הקלד יעד (שם רחוב/כתובת או תחנה)", fontSize = 12.sp) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
@@ -980,11 +1390,19 @@ fun RoutePlannerScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = {
                             keyboardController?.hide()
-                            if (selectedDestination == null && destinationResults.isNotEmpty()) {
-                                val first = destinationResults.first()
-                                selectedDestination = first.stop1
-                                destinationQuery = first.baseName
-                                destinationResults = emptyList()
+                            if (selectedDestination == null) {
+                                val firstAddr = destinationAddressResults.firstOrNull()
+                                val firstStop = destinationStopResults.firstOrNull()
+                                if (firstStop != null) {
+                                    selectedDestination = firstStop.stop1
+                                    destinationQuery = firstStop.baseName
+                                } else if (firstAddr != null) {
+                                    val synthetic = addressToSyntheticStop(firstAddr)
+                                    selectedDestination = synthetic
+                                    destinationQuery = synthetic.name
+                                }
+                                destinationStopResults = emptyList()
+                                destinationAddressResults = emptyList()
                             }
                             searchRoute()
                         })
@@ -999,16 +1417,53 @@ fun RoutePlannerScreen(
                     }
                 }
 
-                // תוצאות חיפוש יעד
-                if (activeField == "destination" && destinationResults.isNotEmpty()) {
-                    destinationResults.take(6).forEach { group ->
+                // תוצאות חיפוש יעד (רחובות/כתובות + תחנות)
+                if (activeField == "destination" && (destinationAddressResults.isNotEmpty() || destinationStopResults.isNotEmpty())) {
+                    destinationAddressResults.take(5).forEach { addr ->
+                        val synthetic = addressToSyntheticStop(addr)
+                        val icon = when (addr.kind) {
+                            AddressSearchRepository.ResultKind.CITY,
+                            AddressSearchRepository.ResultKind.PLACE -> "🏙️"
+                            AddressSearchRepository.ResultKind.STREET -> "🛣️"
+                            AddressSearchRepository.ResultKind.ADDRESS -> "📍"
+                        }
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedDestination = synthetic
+                                    destinationQuery = synthetic.name
+                                    destinationStopResults = emptyList()
+                                    destinationAddressResults = emptyList()
+                                    keyboardController?.hide()
+                                    searchRoute()
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(icon, fontSize = 16.sp)
+                                Column {
+                                    Text(addr.title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(addr.subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+
+                    destinationStopResults.take(5).forEach { group ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
                                     selectedDestination = group.stop1
                                     destinationQuery = group.baseName
-                                    destinationResults = emptyList()
+                                    destinationStopResults = emptyList()
+                                    destinationAddressResults = emptyList()
                                     keyboardController?.hide()
                                     searchRoute()
                                 },
@@ -1020,7 +1475,7 @@ fun RoutePlannerScreen(
                                     Text("⭐ ${group.customName}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                                     Text(group.baseName, fontSize = 12.sp)
                                 } else {
-                                    Text(group.baseName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("🚏 ${group.baseName}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 if (group.stop2 != null) {
@@ -1050,14 +1505,16 @@ fun RoutePlannerScreen(
                                 if (activeField == "origin") {
                                     selectedOrigin = s
                                     originQuery = s.name
-                                    originResults = emptyList()
+                                    originStopResults = emptyList()
+                                    originAddressResults = emptyList()
                                     destFocusRequester.requestFocus()
                                     activeField = "destination"
                                     scope.launch { scrollState.animateScrollTo(260) }
                                 } else {
                                     selectedDestination = s
                                     destinationQuery = s.name
-                                    destinationResults = emptyList()
+                                    destinationStopResults = emptyList()
+                                    destinationAddressResults = emptyList()
                                     keyboardController?.hide()
                                     searchRoute()
                                 }
@@ -1126,7 +1583,7 @@ fun RoutePlannerScreen(
                     LaunchedEffect(journey) {
                         if (firstLeg != null) {
                             val upcoming = withContext(Dispatchers.IO) {
-                                scheduleRepo.upcomingDepartures(firstLeg.fromStopId, now = journey.departureAt.plusMinutes(1), limit = 8)
+                                scheduleRepo.upcomingDepartures(firstLeg.fromStopId, now = firstLeg.departureAt.plusMinutes(1), limit = 8)
                                     .filter { it.lineNumber == firstLeg.lineNumber }
                                     .take(3)
                                     .map { it.departureAt.format(plannerTimeFormatter) }
@@ -1161,6 +1618,9 @@ fun RoutePlannerScreen(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        journey.initialWalk?.let {
+                                            Text("🚶 ➔", fontSize = 12.sp)
+                                        }
                                         journey.legs.forEachIndexed { i, leg ->
                                             TransitLineBadge(lineNumber = leg.lineNumber, agencyName = leg.agencyName)
                                             if (i < journey.legs.lastIndex) {
@@ -1168,7 +1628,7 @@ fun RoutePlannerScreen(
                                             }
                                         }
                                         journey.finalWalk?.let {
-                                            Text("🚶", fontSize = 12.sp)
+                                            Text("➔ 🚶", fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -1194,10 +1654,24 @@ fun RoutePlannerScreen(
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    journey.initialWalk?.let { iw ->
+                                        Text(
+                                            "• הליכה כ-${iw.walkMinutes} דק' (${iw.distanceMeters.roundToInt()} מ') אל תחנת ${iw.toStopName}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
                                     journey.legs.forEach { leg ->
                                         Text(
                                             "• קו ${leg.lineNumber} מ-${leg.fromStopName} ל-${leg.toStopName}",
                                             style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                    journey.finalWalk?.let { fw ->
+                                        Text(
+                                            "• הליכה מסכמת כ-${fw.walkMinutes} דק' (${fw.distanceMeters.roundToInt()} מ') אל ${fw.toStopName}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.secondary
                                         )
                                     }
 
