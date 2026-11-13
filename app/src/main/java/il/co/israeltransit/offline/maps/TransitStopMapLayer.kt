@@ -356,8 +356,6 @@ object TransitStopMapLayer {
                     AND $longitudeCondition
                     AND stop_lat IS NOT NULL
                     AND stop_lon IS NOT NULL
-                    AND stop_lat BETWEEN -90 AND 90
-                    AND stop_lon BETWEEN -180 AND 180
                 LIMIT $MAX_STOPS_PER_VIEWPORT
             """.trimIndent()
 
@@ -386,6 +384,8 @@ object TransitStopMapLayer {
                     val longitude = cursor.getDouble(lonCol)
 
                     if (!latitude.isFinite() || !longitude.isFinite()) continue
+                    if (latitude == 0.0 && longitude == 0.0) continue
+                    if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) continue
 
                     val stopId = cursor.getString(stopIdCol) ?: continue
                     val stopCode = cursor.getString(stopCodeCol) ?: stopId
@@ -436,7 +436,7 @@ object TransitStopMapLayer {
             Expression.has("point_count")
         ).withProperties(
             circleColor("#245B85"),
-            circleRadius(16f),
+            circleRadius(18f),
             circleStrokeColor("#FFFFFF"),
             circleStrokeWidth(2.5f)
         )
