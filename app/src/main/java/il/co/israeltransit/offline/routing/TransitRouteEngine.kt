@@ -12,7 +12,8 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 class TransitRouteEngine(
-    private val databaseProvider: TransitDatabase
+    private val databaseProvider: TransitDatabase,
+    private val walkingRouter: GraphHopperWalkingRouter? = null
 ) {
     companion object {
         const val MAX_ALLOWED_TRANSFERS = 5
@@ -20,6 +21,9 @@ class TransitRouteEngine(
         private const val MAX_JOURNEY_MINUTES = 720L
         const val DEFAULT_MINIMUM_TRANSFER_MINUTES = 2L
         const val MAX_WALK_TRANSFER_DISTANCE_METERS = 350.0
+        const val MAX_ENDPOINT_WALK_METERS = 900.0
+        private const val FALLBACK_ENDPOINT_WALK_METERS = 2000.0
+        private const val MAX_ENDPOINT_CANDIDATES = 12
 
         fun calculateDistanceMeters(
             lat1: Double?, lon1: Double?,
@@ -30,8 +34,8 @@ class TransitRouteEngine(
             val dLat = Math.toRadians(lat2 - lat1)
             val dLon = Math.toRadians(lon2 - lon1)
             val a = sin(dLat / 2).let { it * it } +
-                    cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                    sin(dLon / 2).let { it * it }
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLon / 2).let { it * it }
             val c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
             return earthRadius * c
         }
@@ -40,6 +44,19 @@ class TransitRouteEngine(
             if (distanceMeters == null || distanceMeters <= 0.0) return 0L
             return ceil(distanceMeters / 70.0).toLong().coerceAtLeast(1L)
         }
+    }
+
+    sealed class RouteEndpoint {
+        data class Stop(
+            val stopId: String,
+            val name: String = ""
+        ) : RouteEndpoint()
+
+        data class Location(
+            val name: String,
+            val latitude: Double,
+            val longitude: Double
+        ) : RouteEndpoint()
     }
 
     data class RouteLeg(
@@ -61,11 +78,27 @@ class TransitRouteEngine(
         val arrivalAt: LocalDateTime
     )
 
+    data class InitialWalk(
+        val fromName: String,
+        val fromLat: Double,
+        val fromLon: Double,
+        val toStopId: String,
+        val toStopName: String,
+        val toLat: Double? = null,
+        val toLon: Double? = null,
+        val distanceMeters: Double,
+        val walkMinutes: Long
+    )
+
     data class FinalWalk(
         val fromStopId: String,
         val fromStopName: String,
+        val fromLat: Double? = null,
+        val fromLon: Double? = null,
         val toStopId: String,
         val toStopName: String,
+        val toLat: Double? = null,
+        val toLon: Double? = null,
         val distanceMeters: Double,
         val walkMinutes: Long
     )
@@ -76,6 +109,7 @@ class TransitRouteEngine(
         val arrivalAt: LocalDateTime,
         val durationMinutes: Long,
         val transfers: Int,
+        val initialWalk: InitialWalk? = null,
         val finalWalk: FinalWalk? = null
     )
 
@@ -134,6 +168,8 @@ class TransitRouteEngine(
     private data class NearbyStop(
         val stopId: String,
         val stopName: String,
+        val lat: Double,
+        val lon: Double,
         val distanceMeters: Double,
         val walkMinutes: Long
     )
@@ -226,6 +262,8 @@ class TransitRouteEngine(
                             NearbyStop(
                                 stopId = target.stopId,
                                 stopName = target.name,
+                                lat = target.lat,
+                                lon = target.lon,
                                 distanceMeters = dist,
                                 walkMinutes = estimateWalkingMinutes(dist)
                             )
@@ -236,6 +274,65 @@ class TransitRouteEngine(
         }
 
         return candidates.sortedBy { it.distanceMeters }.take(6)
+    }
+
+    private fun findStopsNearCoordinate(
+        latitude: Double,
+        longitude: Double,
+        positionsByStop: Map<String, List<BoardPosition>>,
+        maxDistanceMeters: Double,
+        maxCount: Int
+    ): List<NearbyStop> {
+        val grid = stopsGrid ?: return emptyList()
+        val latIdx = (latitude * 200).toInt()
+        val lonIdx = (longitude * 200).toInt()
+        val cellRadius = ceil(maxDistanceMeters / 450.0).toInt().coerceIn(1, 6)
+
+        val candidates = mutableListOf<NearbyStop>()
+        for (dLat in -cellRadius..cellRadius) {
+            for (dLon in -cellRadius..cellRadius) {
+                val key = ((latIdx + dLat).toLong() shl 32) or ((lonIdx + dLon).toLong() and 0xFFFFFFFFL)
+                val cellStops = grid[key] ?: continue
+
+                for (stop in cellStops) {
+                    if (stop.stopId !in positionsByStop) continue
+                    val dist = calculateDistanceMeters(latitude, longitude, stop.lat, stop.lon) ?: continue
+                    if (dist <= maxDistanceMeters) {
+                        candidates.add(
+                            NearbyStop(
+                                stopId = stop.stopId,
+                                stopName = stop.name,
+                                lat = stop.lat,
+                                lon = stop.lon,
+                                distanceMeters = dist,
+                                walkMinutes = estimateWalkingMinutes(dist * 1.2)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        return candidates.sortedBy { it.distanceMeters }.take(maxCount)
+    }
+
+    private fun measureRealWalk(
+        fromLat: Double,
+        fromLon: Double,
+        toLat: Double,
+        toLon: Double,
+        fallbackDistanceMeters: Double
+    ): Pair<Double, Long> {
+        val router = walkingRouter
+        if (router != null && router.isAvailable()) {
+            val result = router.findRoute(fromLat, fromLon, toLat, toLon)
+            if (result is WalkingRouteResult.Success) {
+                val mins = ceil(result.route.estimatedSeconds / 60.0).toLong().coerceAtLeast(1L)
+                return result.route.distanceMeters to mins
+            }
+        }
+        val estimatedDist = fallbackDistanceMeters * 1.2
+        return estimatedDist to estimateWalkingMinutes(estimatedDist)
     }
 
     private fun hasCalendarDates(db: SQLiteDatabase): Boolean {
@@ -279,13 +376,48 @@ class TransitRouteEngine(
         allowWalkingTransfers: Boolean = true,
         maxResults: Int = 5
     ): SearchResult {
-
         if (originStopId.isBlank() || destinationStopId.isBlank()) {
             return SearchResult(emptyList(), "יש לבחור תחנת מוצא ותחנת יעד.")
         }
 
-        if (originStopId == destinationStopId) {
-            return SearchResult(emptyList(), "תחנת המוצא ותחנת היעד זהות.")
+        return findJourneys(
+            origin = RouteEndpoint.Stop(originStopId),
+            destination = RouteEndpoint.Stop(destinationStopId),
+            departureTime = departureTime,
+            maxTransfers = maxTransfers,
+            minimumTransferMinutes = minimumTransferMinutes,
+            allowWalkingTransfers = allowWalkingTransfers,
+            maxResults = maxResults
+        )
+    }
+
+    fun findJourneys(
+        origin: RouteEndpoint,
+        destination: RouteEndpoint,
+        departureTime: LocalDateTime = LocalDateTime.now(),
+        maxTransfers: Int = 3,
+        minimumTransferMinutes: Long = DEFAULT_MINIMUM_TRANSFER_MINUTES,
+        allowWalkingTransfers: Boolean = true,
+        maxResults: Int = 5
+    ): SearchResult {
+
+        if (origin is RouteEndpoint.Stop && destination is RouteEndpoint.Stop) {
+            if (origin.stopId.isBlank() || destination.stopId.isBlank()) {
+                return SearchResult(emptyList(), "יש לבחור תחנת מוצא ותחנת יעד.")
+            }
+            if (origin.stopId == destination.stopId) {
+                return SearchResult(emptyList(), "תחנת המוצא ותחנת היעד זהות.")
+            }
+        }
+
+        if (origin is RouteEndpoint.Location && destination is RouteEndpoint.Location) {
+            val directDist = calculateDistanceMeters(
+                origin.latitude, origin.longitude,
+                destination.latitude, destination.longitude
+            )
+            if (directDist != null && directDist < 20.0) {
+                return SearchResult(emptyList(), "כתובת המוצא וכתובת היעד זהות.")
+            }
         }
 
         if (maxTransfers !in 0..MAX_ALLOWED_TRANSFERS) {
@@ -313,20 +445,121 @@ class TransitRouteEngine(
                 return SearchResult(emptyList(), "לא נמצאו נתוני מסלולים במאגר. יש לייבא קובץ נתונים תקין.")
             }
 
-            if (originStopId !in positionsByStop) {
-                return SearchResult(emptyList(), "תחנת המוצא אינה מופיעה במסלולי התחבורה.")
+            val initialSeeds = mutableMapOf<String, Pair<LocalDateTime, InitialWalk?>>()
+
+            when (origin) {
+                is RouteEndpoint.Stop -> {
+                    if (origin.stopId !in positionsByStop) {
+                        return SearchResult(emptyList(), "תחנת המוצא אינה מופיעה במסלולי התחבורה.")
+                    }
+                    initialSeeds[origin.stopId] = departureTime to null
+                }
+                is RouteEndpoint.Location -> {
+                    var nearbyOrigin = findStopsNearCoordinate(
+                        origin.latitude,
+                        origin.longitude,
+                        positionsByStop,
+                        MAX_ENDPOINT_WALK_METERS,
+                        MAX_ENDPOINT_CANDIDATES
+                    )
+                    if (nearbyOrigin.isEmpty()) {
+                        nearbyOrigin = findStopsNearCoordinate(
+                            origin.latitude,
+                            origin.longitude,
+                            positionsByStop,
+                            FALLBACK_ENDPOINT_WALK_METERS,
+                            6
+                        )
+                    }
+                    if (nearbyOrigin.isEmpty()) {
+                        return SearchResult(emptyList(), "לא נמצאו תחנות תחבורה ציבורית בקרבת כתובת המוצא.")
+                    }
+                    for (stop in nearbyOrigin) {
+                        val (realDist, realMins) = measureRealWalk(
+                            origin.latitude,
+                            origin.longitude,
+                            stop.lat,
+                            stop.lon,
+                            stop.distanceMeters
+                        )
+                        val walk = InitialWalk(
+                            fromName = origin.name,
+                            fromLat = origin.latitude,
+                            fromLon = origin.longitude,
+                            toStopId = stop.stopId,
+                            toStopName = stop.stopName,
+                            toLat = stop.lat,
+                            toLon = stop.lon,
+                            distanceMeters = realDist,
+                            walkMinutes = realMins
+                        )
+                        initialSeeds[stop.stopId] = departureTime.plusMinutes(realMins) to walk
+                    }
+                }
             }
 
-            if (destinationStopId !in positionsByStop) {
-                return SearchResult(emptyList(), "תחנת היעד אינה מופיעה במסלולי התחבורה.")
+            val destinationTargets = mutableMapOf<String, FinalWalk?>()
+            var exactDestinationStopId: String? = null
+
+            when (destination) {
+                is RouteEndpoint.Stop -> {
+                    if (destination.stopId !in positionsByStop) {
+                        return SearchResult(emptyList(), "תחנת היעד אינה מופיעה במסלולי התחבורה.")
+                    }
+                    exactDestinationStopId = destination.stopId
+                    destinationTargets[destination.stopId] = null
+                }
+                is RouteEndpoint.Location -> {
+                    var nearbyDest = findStopsNearCoordinate(
+                        destination.latitude,
+                        destination.longitude,
+                        positionsByStop,
+                        MAX_ENDPOINT_WALK_METERS,
+                        MAX_ENDPOINT_CANDIDATES
+                    )
+                    if (nearbyDest.isEmpty()) {
+                        nearbyDest = findStopsNearCoordinate(
+                            destination.latitude,
+                            destination.longitude,
+                            positionsByStop,
+                            FALLBACK_ENDPOINT_WALK_METERS,
+                            6
+                        )
+                    }
+                    if (nearbyDest.isEmpty()) {
+                        return SearchResult(emptyList(), "לא נמצאו תחנות תחבורה ציבורית בקרבת כתובת היעד.")
+                    }
+                    for (stop in nearbyDest) {
+                        val (realDist, realMins) = measureRealWalk(
+                            stop.lat,
+                            stop.lon,
+                            destination.latitude,
+                            destination.longitude,
+                            stop.distanceMeters
+                        )
+                        destinationTargets[stop.stopId] = FinalWalk(
+                            fromStopId = stop.stopId,
+                            fromStopName = stop.stopName,
+                            fromLat = stop.lat,
+                            fromLon = stop.lon,
+                            toStopId = "coord:${destination.latitude},${destination.longitude}",
+                            toStopName = destination.name,
+                            toLat = destination.latitude,
+                            toLon = destination.longitude,
+                            distanceMeters = realDist,
+                            walkMinutes = realMins
+                        )
+                    }
+                }
             }
 
             calculateJourneys(
                 db = db,
                 patternsById = patternsById,
                 positionsByStop = positionsByStop,
-                originStopId = originStopId,
-                destinationStopId = destinationStopId,
+                initialSeeds = initialSeeds,
+                destinationTargets = destinationTargets,
+                exactDestinationStopId = exactDestinationStopId,
                 departureTime = departureTime,
                 maxTransfers = effectiveMaxTransfers,
                 minimumTransferMinutes = effectiveBufferMinutes,
@@ -405,8 +638,9 @@ class TransitRouteEngine(
         db: SQLiteDatabase,
         patternsById: Map<Int, Pattern>,
         positionsByStop: Map<String, List<BoardPosition>>,
-        originStopId: String,
-        destinationStopId: String,
+        initialSeeds: Map<String, Pair<LocalDateTime, InitialWalk?>>,
+        destinationTargets: Map<String, FinalWalk?>,
+        exactDestinationStopId: String?,
         departureTime: LocalDateTime,
         maxTransfers: Int,
         minimumTransferMinutes: Long,
@@ -416,19 +650,25 @@ class TransitRouteEngine(
 
         var previousRound = mutableMapOf<String, MutableList<Label>>()
         val nearbyStopsCache = mutableMapOf<String, List<NearbyStop>>()
+        val initialWalksByStop = mutableMapOf<String, InitialWalk>()
 
-        previousRound[originStopId] = mutableListOf(
-            Label(
-                arrivalAt = departureTime,
-                previous = null,
-                leg = null
+        for ((stopId, seed) in initialSeeds) {
+            val (readyAt, initialWalk) = seed
+            if (initialWalk != null) {
+                initialWalksByStop[stopId] = initialWalk
+            }
+            previousRound[stopId] = mutableListOf(
+                Label(
+                    arrivalAt = readyAt,
+                    previous = null,
+                    leg = null
+                )
             )
-        )
+        }
 
         val foundJourneys = mutableListOf<Journey>()
         var bestDestinationArrival: LocalDateTime? = null
 
-        // מטמון נטול הגבלת 6 פריטים למשך החיפוש הנוכחי
         val runsCache = mutableMapOf<RunCacheKey, List<TripRun>>()
 
         fun labelSignature(label: Label): String {
@@ -491,7 +731,6 @@ class TransitRouteEngine(
                 for ((targetStopId, walkMinutes) in stopsToExpand) {
                     val positions = positionsByStop[targetStopId].orEmpty()
                     for (label in labels) {
-                        // גיזום: אם התווית מגיעה אחרי הגעה קיימת טובה יותר ליעד - דלג!
                         if (bestDestinationArrival != null && label.arrivalAt.isAfter(bestDestinationArrival)) {
                             continue
                         }
@@ -564,7 +803,6 @@ class TransitRouteEngine(
 
                             if (actualDepartureAt.isBefore(earliestBoarding)) continue
 
-                            // גיזום: נסיעה שיוצאת אחרי שכבר הגענו ליעד אינה יכולה לשפר
                             if (bestDestinationArrival != null && actualDepartureAt.isAfter(bestDestinationArrival)) {
                                 continue
                             }
@@ -584,7 +822,6 @@ class TransitRouteEngine(
 
                                 if (arrivalAt.isBefore(actualDepartureAt)) continue
 
-                                // גיזום: ירידה שמאוחרת מההגעה הטובה ביותר הידועה
                                 if (bestDestinationArrival != null && arrivalAt.isAfter(bestDestinationArrival)) {
                                     continue
                                 }
@@ -626,27 +863,42 @@ class TransitRouteEngine(
                 }
             }
 
-            // בדיקת הגעה ליעד
+            // בדיקת הגעה ליעד (תחנת יעד או כל אחת מתחנות הסביבה של כתובת היעד)
             val destinationCandidates = mutableListOf<Pair<Label, FinalWalk?>>()
 
-            for (l in nextRound[destinationStopId].orEmpty()) {
-                destinationCandidates.add(l to null)
+            for ((destStopId, targetWalk) in destinationTargets) {
+                for (l in nextRound[destStopId].orEmpty()) {
+                    if (targetWalk != null) {
+                        val updatedLabel = l.copy(
+                            arrivalAt = l.arrivalAt.plusMinutes(targetWalk.walkMinutes)
+                        )
+                        destinationCandidates.add(updatedLabel to targetWalk)
+                    } else {
+                        destinationCandidates.add(l to null)
+                    }
+                }
             }
 
-            if (allowWalkingTransfers) {
+            if (allowWalkingTransfers && exactDestinationStopId != null) {
+                val destCached = stopsById?.get(exactDestinationStopId)
                 for ((stopId, labels) in nextRound) {
-                    if (stopId != destinationStopId) {
+                    if (stopId != exactDestinationStopId) {
                         val nearby = nearbyStopsCache.getOrPut(stopId) {
                             getNearbyStopsFast(stopId)
                         }
-                        val targetMatch = nearby.firstOrNull { it.stopId == destinationStopId }
+                        val targetMatch = nearby.firstOrNull { it.stopId == exactDestinationStopId }
                         if (targetMatch != null) {
+                            val fromCached = stopsById?.get(stopId)
                             val fromStopName = labels.firstOrNull()?.leg?.toStopName ?: stopId
                             val finalWalk = FinalWalk(
                                 fromStopId = stopId,
                                 fromStopName = fromStopName,
+                                fromLat = fromCached?.lat,
+                                fromLon = fromCached?.lon,
                                 toStopId = targetMatch.stopId,
                                 toStopName = targetMatch.stopName,
+                                toLat = destCached?.lat,
+                                toLon = destCached?.lon,
                                 distanceMeters = targetMatch.distanceMeters,
                                 walkMinutes = targetMatch.walkMinutes
                             )
@@ -662,10 +914,9 @@ class TransitRouteEngine(
             }
 
             for ((destLabel, finalWalk) in destinationCandidates) {
-                val journey = buildJourney(destLabel, finalWalk)
+                val journey = buildJourney(destLabel, initialWalksByStop, finalWalk)
                 if (journey.legs.isNotEmpty() && journey.transfers <= maxTransfers) {
                     foundJourneys.add(journey)
-                    // עדכון זמן ההגעה הטוב ביותר ליעד לצורך גיזום חכם
                     if (bestDestinationArrival == null || journey.arrivalAt.isBefore(bestDestinationArrival)) {
                         bestDestinationArrival = journey.arrivalAt
                     }
@@ -678,8 +929,9 @@ class TransitRouteEngine(
 
         val journeys = foundJourneys
             .distinctBy { journey ->
+                val initKey = journey.initialWalk?.let { "${it.toStopId}>" } ?: ""
                 val walkKey = journey.finalWalk?.let { ">${it.toStopId}" } ?: ""
-                journey.legs.joinToString("|") {
+                initKey + journey.legs.joinToString("|") {
                     "${it.tripId}@${it.departureAt}:${it.fromStopId}>${it.toStopId}"
                 } + walkKey
             }
@@ -693,7 +945,7 @@ class TransitRouteEngine(
 
         return if (journeys.isEmpty()) {
             val message = if (maxTransfers == 0) {
-                "לא נמצאו קווים ישירים בין התחנות. אפשר לאפשר החלפות במסך ההגדרות."
+                "לא נמצאו קווים ישירים מתאימים. אפשר לאפשר החלפות במסך ההגדרות."
             } else if (!allowWalkingTransfers) {
                 "לא נמצא מסלול מתאים ללא הליכה בין תחנות (עד $maxTransfers החלפות). באפשרותך לאפשר הליכה בהגדרות."
             } else {
@@ -889,6 +1141,7 @@ class TransitRouteEngine(
 
     private fun buildJourney(
         destinationLabel: Label,
+        initialWalksByStop: Map<String, InitialWalk>,
         finalWalk: FinalWalk?
     ): Journey {
         val legs = mutableListOf<RouteLeg>()
@@ -906,15 +1159,22 @@ class TransitRouteEngine(
         }
 
         val first = legs.first()
+        val initialWalk = initialWalksByStop[first.fromStopId]
+        val journeyDepartureAt = if (initialWalk != null) {
+            first.departureAt.minusMinutes(initialWalk.walkMinutes)
+        } else {
+            first.departureAt
+        }
         val finalArrivalAt = destinationLabel.arrivalAt
-        val duration = Duration.between(first.departureAt, finalArrivalAt).toMinutes()
+        val duration = Duration.between(journeyDepartureAt, finalArrivalAt).toMinutes()
 
         return Journey(
             legs = legs,
-            departureAt = first.departureAt,
+            departureAt = journeyDepartureAt,
             arrivalAt = finalArrivalAt,
             durationMinutes = duration,
             transfers = (legs.size - 1).coerceAtLeast(0),
+            initialWalk = initialWalk,
             finalWalk = finalWalk
         )
     }
