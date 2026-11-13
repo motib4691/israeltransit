@@ -34,7 +34,6 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -82,6 +81,8 @@ import java.util.Locale
 private const val STOP_LAYER_ID = "transit-stops-individual"
 private const val PICKED_PIN_SOURCE_ID = "transit-picked-pin-source"
 private const val PICKED_PIN_LAYER_ID = "transit-picked-pin-layer"
+private const val ORIGIN_PIN_SOURCE_ID = "transit-origin-pin-source"
+private const val ORIGIN_PIN_LAYER_ID = "transit-origin-pin-layer"
 
 private data class SelectedTransitStop(
     val id: String,
@@ -114,12 +115,44 @@ private val QUICK_CITIES = listOf(
     QuickCityItem("נתניה", 32.3215, 34.8532),
     QuickCityItem("בני ברק", 32.0833, 34.8333),
     QuickCityItem("באר שבע", 31.2530, 34.7915),
+    QuickCityItem("חולון", 32.0158, 34.7874),
+    QuickCityItem("רמת גן", 32.0684, 34.8248),
+    QuickCityItem("אשקלון", 31.6688, 34.5743),
     QuickCityItem("רחובות", 31.8928, 34.8113),
+    QuickCityItem("בת ים", 32.0167, 34.7500),
     QuickCityItem("בית שמש", 31.7470, 34.9881),
+    QuickCityItem("כפר סבא", 32.1750, 34.9069),
+    QuickCityItem("הרצליה", 32.1663, 34.8432),
+    QuickCityItem("חדרה", 32.4340, 34.9197),
+    QuickCityItem("מודיעין-מכבים-רעות", 31.8903, 35.0104),
+    QuickCityItem("רעננה", 32.1848, 34.8708),
+    QuickCityItem("הוד השרון", 32.1500, 34.8833),
+    QuickCityItem("רמת השרון", 32.1461, 34.8394),
+    QuickCityItem("גבעתיים", 32.0722, 34.8125),
+    QuickCityItem("ראש העין", 32.0956, 34.9566),
+    QuickCityItem("לוד", 31.9514, 34.8953),
+    QuickCityItem("רמלה", 31.9292, 34.8656),
+    QuickCityItem("יבנה", 31.8781, 34.7398),
+    QuickCityItem("נס ציונה", 31.9308, 34.7987),
     QuickCityItem("מודיעין עילית", 31.9328, 35.0442),
     QuickCityItem("ביתר עילית", 31.6978, 35.1158),
+    QuickCityItem("אלעד", 32.0522, 34.9511),
+    QuickCityItem("מעלה אדומים", 31.7753, 35.2981),
+    QuickCityItem("נצרת", 32.6996, 35.3035),
+    QuickCityItem("נוף הגליל", 32.7081, 35.3247),
+    QuickCityItem("עפולה", 32.6075, 35.2897),
     QuickCityItem("טבריה", 32.7922, 35.5312),
     QuickCityItem("צפת", 32.9646, 35.4960),
+    QuickCityItem("כרמיאל", 32.9136, 35.2961),
+    QuickCityItem("עכו", 32.9278, 35.0839),
+    QuickCityItem("נהריה", 33.0058, 35.0942),
+    QuickCityItem("קריית שמונה", 33.2073, 35.5721),
+    QuickCityItem("קריית גת", 31.6100, 34.7642),
+    QuickCityItem("נתיבות", 31.4222, 34.5889),
+    QuickCityItem("אופקים", 31.3144, 34.6203),
+    QuickCityItem("שדרות", 31.5250, 34.5969),
+    QuickCityItem("דימונה", 31.0694, 35.0333),
+    QuickCityItem("ערד", 31.2589, 35.2128),
     QuickCityItem("אילת", 29.5577, 34.9519)
 )
 
@@ -132,9 +165,11 @@ fun TransitMapScreen(
     initialZoom: Double = 12.0,
     onPlanRouteFrom: ((TransitRepository.TransitStop) -> Unit)? = null,
     onPlanRouteTo: ((TransitRepository.TransitStop) -> Unit)? = null,
+    onPlanRouteWithEndpoints: ((TransitRepository.TransitStop, TransitRepository.TransitStop) -> Unit)? = null,
     onOpenStopDetails: ((TransitRepository.TransitStop) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     showSearchBar: Boolean = true,
+    topBannerMessage: String? = null,
     onError: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -187,6 +222,10 @@ fun TransitMapScreen(
         mutableStateOf<PickedMapLocation?>(null)
     }
 
+    var pendingOrigin by remember {
+        mutableStateOf<TransitRepository.TransitStop?>(null)
+    }
+
     var isSearchOpen by remember {
         mutableStateOf(false)
     }
@@ -207,7 +246,13 @@ fun TransitMapScreen(
         mutableStateOf(false)
     }
 
-    fun updatePickedPinOnMap(latitude: Double?, longitude: Double?) {
+    fun updateMapPin(
+        sourceId: String,
+        layerId: String,
+        colorHex: String,
+        latitude: Double?,
+        longitude: Double?
+    ) {
         val map = activeMap ?: return
         map.getStyle { style ->
             if (!style.isFullyLoaded) return@getStyle
@@ -220,17 +265,17 @@ fun TransitMapScreen(
                     FeatureCollection.fromFeatures(emptyArray<Feature>())
                 }
 
-                val existing = style.getSource(PICKED_PIN_SOURCE_ID) as? GeoJsonSource
+                val existing = style.getSource(sourceId) as? GeoJsonSource
                 if (existing != null) {
                     existing.setGeoJson(collection)
                 } else {
-                    style.addSource(GeoJsonSource(PICKED_PIN_SOURCE_ID, collection))
+                    style.addSource(GeoJsonSource(sourceId, collection))
                 }
 
-                if (style.getLayer(PICKED_PIN_LAYER_ID) == null) {
+                if (style.getLayer(layerId) == null) {
                     style.addLayer(
-                        CircleLayer(PICKED_PIN_LAYER_ID, PICKED_PIN_SOURCE_ID).withProperties(
-                            circleColor("#D32F2F"),
+                        CircleLayer(layerId, sourceId).withProperties(
+                            circleColor(colorHex),
                             circleRadius(9f),
                             circleStrokeColor("#FFFFFF"),
                             circleStrokeWidth(3f)
@@ -240,6 +285,14 @@ fun TransitMapScreen(
             } catch (_: Exception) {
             }
         }
+    }
+
+    fun updatePickedPinOnMap(latitude: Double?, longitude: Double?) {
+        updateMapPin(PICKED_PIN_SOURCE_ID, PICKED_PIN_LAYER_ID, "#D32F2F", latitude, longitude)
+    }
+
+    fun updateOriginPinOnMap(latitude: Double?, longitude: Double?) {
+        updateMapPin(ORIGIN_PIN_SOURCE_ID, ORIGIN_PIN_LAYER_ID, "#2E7D32", latitude, longitude)
     }
 
     fun animateCameraTo(lat: Double, lon: Double, zoom: Double) {
@@ -252,6 +305,35 @@ fun TransitMapScreen(
             ),
             900
         )
+    }
+
+    fun handleRouteFromAction(stop: TransitRepository.TransitStop) {
+        if (onPlanRouteWithEndpoints != null) {
+            pendingOrigin = stop
+            updateOriginPinOnMap(stop.latitude, stop.longitude)
+            selectedStop = null
+            showStopActions = false
+            pickedLocation = null
+            updatePickedPinOnMap(null, null)
+            Toast.makeText(
+                context,
+                "המוצא הוגדר: ${stop.name}. לחץ לחיצה ארוכה או בחר תחנה ליעד.",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            onPlanRouteFrom?.invoke(stop)
+        }
+    }
+
+    fun handleRouteToAction(stop: TransitRepository.TransitStop) {
+        val origin = pendingOrigin
+        if (origin != null && onPlanRouteWithEndpoints != null) {
+            pendingOrigin = null
+            updateOriginPinOnMap(null, null)
+            onPlanRouteWithEndpoints(origin, stop)
+        } else {
+            onPlanRouteTo?.invoke(stop)
+        }
     }
 
     fun selectStopAndLoadLines(stop: SelectedTransitStop) {
@@ -350,131 +432,154 @@ fun TransitMapScreen(
             activeMap = map
 
             map.getStyle { style ->
+                val clickListener =
+                    MapLibreMap.OnMapClickListener { coordinate ->
+                        if (isSearchOpen) {
+                            isSearchOpen = false
+                            return@OnMapClickListener true
+                        }
+
+                        val screenPoint = map.projection.toScreenLocation(coordinate)
+
+                        if (
+                            TransitMapClusterController.handleClusterTap(
+                                map = map,
+                                style = style,
+                                screenPoint = screenPoint
+                            )
+                        ) {
+                            return@OnMapClickListener true
+                        }
+
+                        val features = map.queryRenderedFeatures(
+                            screenPoint,
+                            STOP_LAYER_ID
+                        )
+
+                        val feature = features.firstOrNull()
+
+                        if (feature == null) {
+                            selectedStop = null
+                            showStopActions = false
+                            selectedLines = emptyList()
+                            linesError = null
+                            isLoadingLines = false
+                            pickedLocation = null
+                            updatePickedPinOnMap(null, null)
+                            false
+                        } else {
+                            val properties = feature.properties()
+
+                            val stopId = properties
+                                ?.get("stop_id")
+                                ?.takeIf { !it.isJsonNull }
+                                ?.asString ?: ""
+
+                            val stopCode = properties
+                                ?.get("stop_code")
+                                ?.takeIf { !it.isJsonNull }
+                                ?.asString ?: stopId
+
+                            val stopName = properties
+                                ?.get("stop_name")
+                                ?.takeIf { !it.isJsonNull }
+                                ?.asString
+                                ?.takeIf { it.isNotBlank() }
+                                ?: "תחנה ללא שם"
+
+                            val geometry = feature.geometry() as? Point
+
+                            if (stopId.isNotBlank()) {
+                                selectStopAndLoadLines(
+                                    SelectedTransitStop(
+                                        id = stopId,
+                                        name = stopName,
+                                        stopCode = stopCode,
+                                        latitude = geometry?.latitude(),
+                                        longitude = geometry?.longitude()
+                                    )
+                                )
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    }
+
+                val longClickListener =
+                    MapLibreMap.OnMapLongClickListener { coordinate ->
+                        isSearchOpen = false
+                        selectedStop = null
+                        showStopActions = false
+                        selectedLines = emptyList()
+                        linesError = null
+                        isLoadingLines = false
+
+                        val lat = coordinate.latitude
+                        val lon = coordinate.longitude
+                        val coordsLabel = String.format(
+                            Locale.US,
+                            "%.5f, %.5f",
+                            lat,
+                            lon
+                        )
+
+                        val currentPendingOrigin = pendingOrigin
+                        if (currentPendingOrigin != null && onPlanRouteWithEndpoints != null) {
+                            // הלחיצה הבאה אחרי בחירת המוצא מוגדרת אוטומטית כיעד ומעבירה לחישוב המסלול
+                            coroutineScope.launch {
+                                val nearestLabel = withContext(Dispatchers.IO) {
+                                    addressRepository.findNearestPlaceLabel(lat, lon)
+                                }
+                                val destName = nearestLabel?.takeIf { it.isNotBlank() }
+                                    ?: "יעד במפה ($coordsLabel)"
+                                val destStop = TransitRepository.TransitStop(
+                                    stopId = "coord:$lat,$lon",
+                                    name = destName,
+                                    latitude = lat,
+                                    longitude = lon,
+                                    stopCode = ""
+                                )
+                                pendingOrigin = null
+                                updateOriginPinOnMap(null, null)
+                                onPlanRouteWithEndpoints(currentPendingOrigin, destStop)
+                            }
+                            return@OnMapLongClickListener true
+                        }
+
+                        updatePickedPinOnMap(lat, lon)
+                        pickedLocation = PickedMapLocation(
+                            title = "נקודה שנבחרה במפה",
+                            subtitle = coordsLabel,
+                            latitude = lat,
+                            longitude = lon
+                        )
+
+                        coroutineScope.launch {
+                            val nearestLabel = withContext(Dispatchers.IO) {
+                                addressRepository.findNearestPlaceLabel(lat, lon)
+                            }
+                            if (
+                                pickedLocation?.latitude == lat &&
+                                pickedLocation?.longitude == lon &&
+                                !nearestLabel.isNullOrBlank()
+                            ) {
+                                pickedLocation = pickedLocation?.copy(
+                                    title = nearestLabel
+                                )
+                            }
+                        }
+                        true
+                    }
+
+                map.addOnMapClickListener(clickListener)
+                map.addOnMapLongClickListener(longClickListener)
+
                 TransitStopMapLayer.install(
                     context = applicationContext,
                     style = style,
                     map = map,
-                    onComplete = {
-                        val clickListener =
-                            MapLibreMap.OnMapClickListener { coordinate ->
-                                if (isSearchOpen) {
-                                    isSearchOpen = false
-                                    return@OnMapClickListener true
-                                }
-
-                                val screenPoint = map.projection.toScreenLocation(coordinate)
-
-                                if (
-                                    TransitMapClusterController.handleClusterTap(
-                                        map = map,
-                                        style = style,
-                                        screenPoint = screenPoint
-                                    )
-                                ) {
-                                    return@OnMapClickListener true
-                                }
-
-                                val features = map.queryRenderedFeatures(
-                                    screenPoint,
-                                    STOP_LAYER_ID
-                                )
-
-                                val feature = features.firstOrNull()
-
-                                if (feature == null) {
-                                    selectedStop = null
-                                    showStopActions = false
-                                    selectedLines = emptyList()
-                                    linesError = null
-                                    isLoadingLines = false
-                                    pickedLocation = null
-                                    updatePickedPinOnMap(null, null)
-                                    false
-                                } else {
-                                    val properties = feature.properties()
-
-                                    val stopId = properties
-                                        ?.get("stop_id")
-                                        ?.takeIf { !it.isJsonNull }
-                                        ?.asString ?: ""
-
-                                    val stopCode = properties
-                                        ?.get("stop_code")
-                                        ?.takeIf { !it.isJsonNull }
-                                        ?.asString ?: stopId
-
-                                    val stopName = properties
-                                        ?.get("stop_name")
-                                        ?.takeIf { !it.isJsonNull }
-                                        ?.asString
-                                        ?.takeIf { it.isNotBlank() }
-                                        ?: "תחנה ללא שם"
-
-                                    val geometry = feature.geometry() as? Point
-
-                                    if (stopId.isNotBlank()) {
-                                        selectStopAndLoadLines(
-                                            SelectedTransitStop(
-                                                id = stopId,
-                                                name = stopName,
-                                                stopCode = stopCode,
-                                                latitude = geometry?.latitude(),
-                                                longitude = geometry?.longitude()
-                                            )
-                                        )
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                            }
-
-                        val longClickListener =
-                            MapLibreMap.OnMapLongClickListener { coordinate ->
-                                isSearchOpen = false
-                                selectedStop = null
-                                showStopActions = false
-                                selectedLines = emptyList()
-                                linesError = null
-                                isLoadingLines = false
-
-                                val lat = coordinate.latitude
-                                val lon = coordinate.longitude
-                                val coordsLabel = String.format(
-                                    Locale.US,
-                                    "%.5f, %.5f",
-                                    lat,
-                                    lon
-                                )
-
-                                updatePickedPinOnMap(lat, lon)
-                                pickedLocation = PickedMapLocation(
-                                    title = "נקודה שנבחרה במפה",
-                                    subtitle = coordsLabel,
-                                    latitude = lat,
-                                    longitude = lon
-                                )
-
-                                coroutineScope.launch {
-                                    val nearestLabel = withContext(Dispatchers.IO) {
-                                        addressRepository.findNearestPlaceLabel(lat, lon)
-                                    }
-                                    if (
-                                        pickedLocation?.latitude == lat &&
-                                        pickedLocation?.longitude == lon &&
-                                        !nearestLabel.isNullOrBlank()
-                                    ) {
-                                        pickedLocation = pickedLocation?.copy(
-                                            title = nearestLabel
-                                        )
-                                    }
-                                }
-                                true
-                            }
-
-                        map.addOnMapClickListener(clickListener)
-                        map.addOnMapLongClickListener(longClickListener)
-                    },
+                    onComplete = {},
                     onError = onError
                 )
             }
@@ -584,6 +689,79 @@ fun TransitMapScreen(
                 }
             }
 
+            // באנר מצב בחירת יעד כשמוצא כבר נבחר על המפה
+            if (!isSearchOpen && pendingOrigin != null) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.96f),
+                    shadowElevation = 4.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "📍 מוצא: ${pendingOrigin!!.name}",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "כעת לחץ לחיצה ארוכה על יעד במפה או בחר תחנה",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (onPlanRouteFrom != null) {
+                                TextButton(
+                                    onClick = {
+                                        val orig = pendingOrigin
+                                        pendingOrigin = null
+                                        updateOriginPinOnMap(null, null)
+                                        if (orig != null) onPlanRouteFrom(orig)
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("פתח תכנון", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            IconButton(
+                                onClick = {
+                                    pendingOrigin = null
+                                    updateOriginPinOnMap(null, null)
+                                },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Text("✕", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                    }
+                }
+            } else if (!isSearchOpen && !topBannerMessage.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    shadowElevation = 3.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = topBannerMessage,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                    )
+                }
+            }
+
             // חלונית תוצאות חיפוש נפתחת
             AnimatedVisibility(visible = isSearchOpen) {
                 Card(
@@ -629,7 +807,7 @@ fun TransitMapScreen(
                             }
                         } else if (searchQuery.isBlank()) {
                             Text(
-                                text = "מעבר מהיר לערים בישראל",
+                                text = "מעבר מהיר לערים ויישובים בישראל (${QUICK_CITIES.size})",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -637,7 +815,7 @@ fun TransitMapScreen(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 260.dp)
+                                    .heightIn(max = 280.dp)
                             ) {
                                 items(QUICK_CITIES) { city ->
                                     Row(
@@ -1013,7 +1191,7 @@ fun TransitMapScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    if (!showStopActions) {
+                    if (!showStopActions && pendingOrigin == null) {
                         Text(
                             text = "לחץ על הפרטים לבחירת פעולה (פרטי תחנה / תכנון מסלול) ▾",
                             fontSize = 12.sp,
@@ -1022,7 +1200,7 @@ fun TransitMapScreen(
                         )
                     }
 
-                    AnimatedVisibility(visible = showStopActions) {
+                    AnimatedVisibility(visible = showStopActions || pendingOrigin != null) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1032,6 +1210,16 @@ fun TransitMapScreen(
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                             )
+
+                            if (pendingOrigin != null && onPlanRouteWithEndpoints != null) {
+                                Button(
+                                    onClick = { handleRouteToAction(transitStop) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Text("🏁 הגדר כיעד וחשב מסלול מ־${pendingOrigin!!.name}")
+                                }
+                            }
 
                             if (onOpenStopDetails != null) {
                                 Button(
@@ -1047,16 +1235,16 @@ fun TransitMapScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (onPlanRouteFrom != null) {
+                                if (onPlanRouteFrom != null || onPlanRouteWithEndpoints != null) {
                                     RouteFromButton(
-                                        onClick = { onPlanRouteFrom(transitStop) },
+                                        onClick = { handleRouteFromAction(transitStop) },
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
 
-                                if (onPlanRouteTo != null) {
+                                if (onPlanRouteTo != null && pendingOrigin == null) {
                                     RouteToButton(
-                                        onClick = { onPlanRouteTo(transitStop) },
+                                        onClick = { handleRouteToAction(transitStop) },
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -1121,20 +1309,30 @@ fun TransitMapScreen(
                             }
                         }
 
+                        if (pendingOrigin != null && onPlanRouteWithEndpoints != null) {
+                            Button(
+                                onClick = { handleRouteToAction(pointAsStop) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Text("🏁 הגדר כיעד וחשב מסלול מ־${pendingOrigin!!.name}")
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (onPlanRouteFrom != null) {
+                            if (onPlanRouteFrom != null || onPlanRouteWithEndpoints != null) {
                                 RouteFromButton(
-                                    onClick = { onPlanRouteFrom(pointAsStop) },
+                                    onClick = { handleRouteFromAction(pointAsStop) },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
 
-                            if (onPlanRouteTo != null) {
+                            if (onPlanRouteTo != null && pendingOrigin == null) {
                                 RouteToButton(
-                                    onClick = { onPlanRouteTo(pointAsStop) },
+                                    onClick = { handleRouteToAction(pointAsStop) },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
