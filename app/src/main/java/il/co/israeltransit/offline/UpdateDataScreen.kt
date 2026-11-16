@@ -38,7 +38,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var busy by remember { mutableStateOf(false) }
-    var statusMessage by remember { mutableStateOf("בחר קובץ נתונים או חבילת מפה להתקנה.") }
+    var statusMessage by remember { mutableStateOf(stringResource(R.string.ui_141581)) }
     var refreshVersion by remember { mutableIntStateOf(0) }
 
     val locations = remember(refreshVersion) { storage.availableLocations() }
@@ -56,7 +56,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
         if (uri != null && !busy) {
             scope.launch {
                 busy = true
-                statusMessage = "מתבצע ייבוא מהיר של מאגר התחבורה..."
+                statusMessage = stringResource(R.string.ui_5e29e6)
                 val result = withContext(Dispatchers.IO) { database.importDatabase(uri) }
                 busy = false
                 statusMessage = result.message
@@ -69,7 +69,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
         if (uri != null && !busy) {
             scope.launch {
                 busy = true
-                statusMessage = "מתבצעים פריסה, ייבוא ואימות של חבילת המפה הלא-מקוונת..."
+                statusMessage = stringResource(R.string.ui_66d13d)
                 val result = withContext(Dispatchers.IO) { mapStorage.importArchive(uri) }
                 busy = false
                 statusMessage = result.message
@@ -244,7 +244,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (busy) "⏳ מתבצע ייבוא / עדכון..." else "מצב המערכת:",
+                        text = if (busy) stringResource(R.string.ui_3b48c7) else stringResource(R.string.ui_1976b5),
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface

@@ -172,7 +172,7 @@ fun SavedStopsScreen(
             },
             title = {
                 Text(
-                    text = if (isEditing) "שינוי שם התחנה" else "שמירת תחנה",
+                    text = if (isEditing) stringResource(R.string.ui_2b907a) else stringResource(R.string.ui_253a4a),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )

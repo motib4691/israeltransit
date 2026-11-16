@@ -91,7 +91,7 @@ fun OfflineMapImportScreen(
                 succeeded = false
 
                 statusMessage =
-                    "מייבא את קובץ המפה ומאמת אותו. אין לסגור את האפליקציה."
+                    stringResource(R.string.ui_e9ff06)
 
                 val result = withContext(Dispatchers.IO) {
                     mapStorage.importArchive(uri)
@@ -118,7 +118,7 @@ fun OfflineMapImportScreen(
 
         Text(
             text = "המפה נשמרת באותו מיקום אחסון שנבחר עבור מאגר התחבורה. " +
-                "התקנת המפה היא אופציונלית ואינה חובה לשימוש באפליקציה."
+                stringResource(R.string.ui_25e18f)
         )
 
         Card(
@@ -136,7 +136,7 @@ fun OfflineMapImportScreen(
                 if (unavailableStorage) {
                     Text(
                         text = "מיקום האחסון שנבחר אינו זמין. " +
-                            "חבר מחדש את כרטיס הזיכרון.",
+                            stringResource(R.string.ui_93d994),
                         color = MaterialTheme.colorScheme.error
                     )
                 } else if (mapAvailable) {
