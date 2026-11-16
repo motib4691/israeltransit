@@ -7,26 +7,25 @@ STRINGS_FILE = "app/src/main/res/values/strings.xml"
 PACKAGE_NAME = "il.co.israeltransit.offline"
 
 HEBREW_CHAR_PATTERN = re.compile(r'[\u0590-\u05FF]')
-
-# מזהה קריאות Text(...) או contentDescription = "..." גם על פני כמה שורות
-MULTI_LINE_UI_PATTERN = re.compile(
-    r'((?<![A-Za-z0-9_])Text\s*\(\s*(?:text\s*=\s*)?|contentDescription\s*=\s*)"((?:\\.|[^"\\])*)"',
-    re.DOTALL
-)
-
-# מזהה משתנים פשוטים ($var) או ביטויים פשוטים (${obj.prop}) ללא מירכאות פנימיות
+STRING_LITERAL_PATTERN = re.compile(r'"((?:\\.|[^"\\])*)"')
 INTERPOLATION_PATTERN = re.compile(
     r'\$(?:\{([A-Za-z0-9_.\(\)]+)\}|([A-Za-z_][A-Za-z0-9_]*))'
 )
 
-FORBIDDEN_CONTEXT_KEYWORDS = (
-    "onClick", "LaunchedEffect", "SideEffect", "DisposableEffect",
-    "Toast", "Snackbar", "Log."
+# בלוקים שיכולים להופיע בתוך @Composable אך הקוד בתוכם אינו בהקשר @Composable
+NON_COMPOSABLE_LAMBDAS = (
+    "onClick", "onValueChange", "onCheckedChange", "onDismissRequest",
+    "onLongClick", "onDoubleClick", "onClickLabel",
+    "LaunchedEffect", "SideEffect", "DisposableEffect",
+    "remember", "rememberSaveable", "derivedStateOf",
+    "pointerInput", "clickable", "combinedClickable",
+    "Comparator", "sortedBy", "filter", "map", "forEach"
 )
+
+FORBIDDEN_LINE_KEYWORDS = ("Toast", "Snackbar", "Log.", "const val")
 
 def escape_android_xml(text, has_placeholders=False):
     if has_placeholders:
-        # באנדרואיד, אם יש %1$s במחרוזת, כל סימן % רגיל חייב להיות מוכפל ל-%%
         text = text.replace("%", "%%")
     text = text.replace("&", "&amp;")
     text = text.replace("<", "&lt;").replace(">", "&gt;")
@@ -70,33 +69,27 @@ def ensure_imports(code):
         lines[insert_idx:insert_idx] = [""] + additions
     return "\n".join(lines)
 
-def mask_comments(code):
-    # מחליף הערות // ו-/* */ ברווחים באותו אורך כדי לשמור על אינדקסים מדויקים ולא לגעת בהערות
-    def replacer(match):
-        s = match.group(0)
-        if s.startswith('"'):
-            return s
-        return re.sub(r'[^\n]', ' ', s)
-
-    pattern = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', re.DOTALL)
-    return pattern.sub(replacer, code)
+def strip_comments_and_strings_for_braces(line):
+    # מנקה הערות ומחרוזות כדי לספור סוגריים { } בצורה מדויקת
+    line = re.sub(r'//.*$', '', line)
+    line = re.sub(r'"(?:\\.|[^"\\])*"', '""', line)
+    return line
 
 def parse_interpolated_string(raw_text):
-    # בודק אם יש תווי בריחה מורכבים (\n, \", \t) - מדלג עליהם לבטיחות
-    raw_text = raw_text.replace('\\"', '"')
-    if "\\" in raw_text:
+    # התרת ראשי תיבות עם \" תוך המשך חסימה של \n, \t וכו'
+    unescaped = raw_text.replace('\\"', '"')
+    if "\\" in unescaped:
         return None, None
 
-    if "$" not in raw_text:
-        return escape_android_xml(raw_text, has_placeholders=False), []
+    if "$" not in unescaped:
+        return escape_android_xml(unescaped, has_placeholders=False), []
 
-    # בודק שאין סימני $ לא תקניים (כמו מחרוזת עם $ שלא הצלחנו לפרק בבטחה)
     args = []
     pos = 0
     parts = []
 
-    for m in INTERPOLATION_PATTERN.finditer(raw_text):
-        before = raw_text[pos:m.start()]
+    for m in INTERPOLATION_PATTERN.finditer(unescaped):
+        before = unescaped[pos:m.start()]
         if "$" in before:
             return None, None
         parts.append(escape_android_xml(before, has_placeholders=True))
@@ -105,7 +98,7 @@ def parse_interpolated_string(raw_text):
         parts.append(f"%{len(args)}$s")
         pos = m.end()
 
-    tail = raw_text[pos:]
+    tail = unescaped[pos:]
     if "$" in tail:
         return None, None
     parts.append(escape_android_xml(tail, has_placeholders=True))
@@ -131,53 +124,123 @@ def main():
             if "@Composable" not in original_code:
                 continue
 
-            masked_code = mask_comments(original_code)
-            replacements = []
+            file_changed = False
+            new_lines = []
 
-            for match in MULTI_LINE_UI_PATTERN.finditer(masked_code):
-                prefix = match.group(1)
-                raw_text = match.group(2)
+            # מעקב מצב מדויק לכל שורה
+            in_block_comment = False
+            pending_composable = False
+            composable_depth = 0
+            in_composable = False
 
-                if not HEBREW_CHAR_PATTERN.search(raw_text):
+            pending_non_composable = False
+            non_composable_depth = 0
+            in_non_composable = False
+
+            for line in original_code.splitlines():
+                stripped = line.strip()
+
+                if "/*" in stripped and "*/" not in stripped:
+                    in_block_comment = True
+                    new_lines.append(line)
+                    continue
+                if in_block_comment:
+                    if "*/" in stripped:
+                        in_block_comment = False
+                    new_lines.append(line)
                     continue
 
-                # בדיקת הסביבה הקרובה (120 תווים אחורה) כדי לוודא שאנחנו לא בתוך onClick / Toast / Log
-                context_before = masked_code[max(0, match.start() - 120):match.start()]
-                last_line_context = context_before.splitlines()[-1] if context_before else ""
-                if any(kw in last_line_context for kw in FORBIDDEN_CONTEXT_KEYWORDS):
+                if stripped.startswith("//") or '"""' in line:
+                    new_lines.append(line)
                     continue
 
-                # בדיקה שאין שרשור מחרוזות מיד אחרי (למשל "..." + var) שעלול לשבור טיפוסים
-                after_char = masked_code[match.end():match.end() + 5].lstrip()
-                if after_char.startswith("+"):
-                    continue
+                if "@Composable" in stripped:
+                    pending_composable = True
 
-                xml_safe_text, args = parse_interpolated_string(raw_text)
-                if xml_safe_text is None:
-                    continue
+                clean_for_braces = strip_comments_and_strings_for_braces(line)
+                opens = clean_for_braces.count("{")
+                closes = clean_for_braces.count("}")
 
-                if xml_safe_text in text_to_id:
-                    str_id = text_to_id[xml_safe_text]
+                # זיהוי כניסה לבלוק לא-קומפוזבילי בתוך פונקציית מסך
+                if in_composable and not in_non_composable:
+                    if any(re.search(rf'\b{kw}\b', clean_for_braces) for kw in NON_COMPOSABLE_LAMBDAS):
+                        if opens > closes:
+                            in_non_composable = True
+                            non_composable_depth = opens - closes
+                        elif opens == 0:
+                            pending_non_composable = True
+
+                elif pending_non_composable and opens > 0:
+                    in_non_composable = True
+                    pending_non_composable = False
+                    non_composable_depth = opens - closes
+
+                elif in_non_composable:
+                    non_composable_depth += opens - closes
+                    if non_composable_depth <= 0:
+                        in_non_composable = False
+                        non_composable_depth = 0
+
+                # ניהול עומק פונקציית ה-@Composable הראשית
+                if pending_composable and opens > 0:
+                    in_composable = True
+                    pending_composable = False
+                    composable_depth = opens - closes
+                elif in_composable:
+                    composable_depth += opens - closes
+
+                # ביצוע ההחלפה רק אם אנחנו בתוך @Composable ולא בתוך בלוק חסום
+                can_replace = (
+                    in_composable
+                    and not in_non_composable
+                    and not pending_non_composable
+                    and not any(kw in clean_for_braces for kw in FORBIDDEN_LINE_KEYWORDS)
+                )
+
+                if can_replace:
+                    def replace_literal(match):
+                        nonlocal file_changed
+                        raw_text = match.group(1)
+
+                        if not HEBREW_CHAR_PATTERN.search(raw_text):
+                            return match.group(0)
+
+                        # דילוג על שרשור מחרוזות ישיר עם + שעלול לשבור טיפוסים
+                        after = line[match.end():match.end() + 5].lstrip()
+                        before = line[:match.start()].rstrip()
+                        if after.startswith("+") or before.endswith("+"):
+                            return match.group(0)
+
+                        xml_safe_text, args = parse_interpolated_string(raw_text)
+                        if xml_safe_text is None:
+                            return match.group(0)
+
+                        if xml_safe_text in text_to_id:
+                            str_id = text_to_id[xml_safe_text]
+                        else:
+                            short_hash = hashlib.md5(xml_safe_text.encode("utf-8")).hexdigest()[:6]
+                            str_id = f"ui_{short_hash}"
+                            text_to_id[xml_safe_text] = str_id
+                            new_entries.append(f'    <string name="{str_id}">{xml_safe_text}</string>')
+
+                        file_changed = True
+                        if args:
+                            return f"stringResource(R.string.{str_id}, {', '.join(args)})"
+                        return f"stringResource(R.string.{str_id})"
+
+                    updated_line = STRING_LITERAL_PATTERN.sub(replace_literal, line)
+                    new_lines.append(updated_line)
                 else:
-                    short_hash = hashlib.md5(xml_safe_text.encode("utf-8")).hexdigest()[:6]
-                    str_id = f"ui_{short_hash}"
-                    text_to_id[xml_safe_text] = str_id
-                    new_entries.append(f'    <string name="{str_id}">{xml_safe_text}</string>')
+                    new_lines.append(line)
 
-                if args:
-                    args_str = ", ".join(args)
-                    replacement_call = f"{prefix}stringResource(R.string.{str_id}, {args_str})"
-                else:
-                    replacement_call = f"{prefix}stringResource(R.string.{str_id})"
+                if in_composable and composable_depth <= 0:
+                    in_composable = False
+                    composable_depth = 0
+                    in_non_composable = False
+                    pending_non_composable = False
 
-                replacements.append((match.start(), match.end(), replacement_call))
-
-            if replacements:
-                # מחיל את ההחלפות מהסוף להתחלה כדי לשמור על מיקומי התווים
-                updated_code = original_code
-                for start, end, repl in reversed(replacements):
-                    updated_code = updated_code[:start] + repl + updated_code[end:]
-
+            if file_changed:
+                updated_code = "\n".join(new_lines)
                 updated_code = ensure_imports(updated_code)
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(updated_code)
@@ -189,7 +252,7 @@ def main():
         with open(STRINGS_FILE, "w", encoding="utf-8") as f:
             f.write(xml_content)
 
-    print(f"Extended extraction complete: {len(new_entries)} new strings across {modified_files_count} files.")
+    print(f"Stage 1 extraction complete: {len(new_entries)} new strings across {modified_files_count} files.")
 
 if __name__ == "__main__":
     main()
