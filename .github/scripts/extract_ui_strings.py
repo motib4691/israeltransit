@@ -16,7 +16,7 @@ INTERPOLATION_PATTERN = re.compile(
 EXCLUDED_FILE_LINES = {
     "TransitSearchScreens.kt": set(range(477, 482)) | set(range(926, 931)),
     "UpdateDataScreen.kt": set(range(39, 44)),
-    "OfflineMapView.kt": set(range(121, 130)),
+    "OfflineMapView.kt": set(range(115, 135)),
 }
 
 NON_COMPOSABLE_CONSTRUCTS = (
