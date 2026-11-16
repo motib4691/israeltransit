@@ -39,7 +39,8 @@ class TransitScheduleRepository(
         val nextDepartureAt: LocalDateTime?,
         val nextTripId: String?,
         val isTomorrow: Boolean,
-        val nextDayOfWeek: DayOfWeek?
+        val nextDayOfWeek: DayOfWeek?,
+        val nextRouteId: String? = null
     )
 
     private fun hasCalendarDates(db: SQLiteDatabase): Boolean {
@@ -100,9 +101,6 @@ class TransitScheduleRepository(
         }
     }
 
-    /**
-     * ממיר שעות שלאחר חצות (00:00 עד 03:59) לסוף יום השירות (אחרי 23:59)
-     */
     private fun toServiceDaySeconds(rawSeconds: Int): Int {
         return if (rawSeconds in 0 until 14400) rawSeconds + 86400 else rawSeconds
     }
@@ -278,10 +276,6 @@ class TransitScheduleRepository(
         ).firstOrNull()
     }
 
-    /**
-     * מחזיר לכל קו שעובר בתחנה האם הוא פעיל ביום השירות הנוכחי,
-     * ואת זמני ההגעה הקרובים שלו (בדקות מעכשיו) בלי להיות מוגבל ל-10 היציאות הראשונות בתחנה.
-     */
     fun getLineStatusesForStop(
         stopId: String,
         now: LocalDateTime = LocalDateTime.now()
@@ -451,12 +445,16 @@ class TransitScheduleRepository(
         }
     }
 
-    private fun queryRouteDeparturesForDate(
+    private fun queryRoutesDeparturesForDate(
         db: SQLiteDatabase,
-        routeId: String,
+        routeIds: List<String>,
         serviceDate: LocalDate,
         referenceStopId: String?
     ): List<Departure> {
+        val cleanIds = routeIds.filter { it.isNotBlank() }.distinct()
+        if (cleanIds.isEmpty()) return emptyList()
+
+        val placeholders = cleanIds.joinToString(",") { "?" }
         val weekday = weekdayColumn(serviceDate)
         val dateStr = dateKey(serviceDate)
         val calendarDatesAvailable = hasCalendarDates(db)
@@ -480,7 +478,7 @@ class TransitScheduleRepository(
             JOIN stop_times st ON st.trip_id = t.trip_id
             LEFT JOIN calendar c ON c.service_id = t.service_id
             LEFT JOIN agency a ON a.agency_id = r.agency_id
-            WHERE r.route_id = ? $stopFilter
+            WHERE r.route_id IN ($placeholders) $stopFilter
               AND (
                   EXISTS (
                       SELECT 1 FROM calendar_dates cd
@@ -520,7 +518,7 @@ class TransitScheduleRepository(
             JOIN stop_times st ON st.trip_id = t.trip_id
             JOIN calendar c ON c.service_id = t.service_id
             LEFT JOIN agency a ON a.agency_id = r.agency_id
-            WHERE r.route_id = ? $stopFilter
+            WHERE r.route_id IN ($placeholders) $stopFilter
               AND c.start_date <= ?
               AND c.end_date >= ?
               AND c.$weekday = '1'
@@ -528,7 +526,7 @@ class TransitScheduleRepository(
             """.trimIndent()
         }
 
-        val baseArgs = if (!referenceStopId.isNullOrBlank()) listOf(routeId, referenceStopId) else listOf(routeId)
+        val baseArgs = if (!referenceStopId.isNullOrBlank()) cleanIds + listOf(referenceStopId) else cleanIds
         val calArgs = if (calendarDatesAvailable) {
             listOf(dateStr, dateStr, dateStr, dateStr)
         } else {
@@ -559,7 +557,10 @@ class TransitScheduleRepository(
             }
         }
 
-        return results.distinctBy { it.departureSeconds }.sortedBy { it.departureSeconds }
+        return results
+            .distinctBy { it.tripId }
+            .sortedWith(compareBy<Departure> { it.departureSeconds }.thenBy { it.tripId })
+            .distinctBy { it.departureSeconds }
     }
 
     private fun isDatabaseValidOnDate(db: SQLiteDatabase, date: LocalDate): Boolean {
@@ -576,9 +577,12 @@ class TransitScheduleRepository(
 
     private fun findFallbackDateForDayOfWeek(
         db: SQLiteDatabase,
-        routeId: String,
+        routeIds: List<String>,
         dayOfWeek: DayOfWeek
     ): LocalDate? {
+        val cleanIds = routeIds.filter { it.isNotBlank() }.distinct()
+        if (cleanIds.isEmpty()) return null
+        val placeholders = cleanIds.joinToString(",") { "?" }
         val weekday = weekdayColumn(dayOfWeek)
         try {
             db.rawQuery(
@@ -586,9 +590,9 @@ class TransitScheduleRepository(
                 SELECT MAX(c.end_date)
                 FROM trips t
                 JOIN calendar c ON c.service_id = t.service_id
-                WHERE t.route_id = ? AND c.$weekday = '1'
+                WHERE t.route_id IN ($placeholders) AND c.$weekday = '1'
                 """.trimIndent(),
-                arrayOf(routeId)
+                cleanIds.toTypedArray()
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
                     val endDate = parseDateKey(cursor.getString(0)) ?: return null
@@ -604,16 +608,22 @@ class TransitScheduleRepository(
         return null
     }
 
-    /**
-     * שליפת לוח הזמנים היומי עבור יום בשבוע (ראשון..שבת) ללא תלות בתאריך,
-     * עם מיון תקין של נסיעות שאחרי חצות (עד 04:00) בסוף יום השירות.
-     */
     fun getDeparturesForDayOfWeek(
         routeId: String,
         dayOfWeek: DayOfWeek,
         referenceStopId: String? = null,
         now: LocalDateTime = LocalDateTime.now()
+    ): List<Departure> = getDeparturesForDayOfWeek(listOf(routeId), dayOfWeek, referenceStopId, now)
+
+    fun getDeparturesForDayOfWeek(
+        routeIds: List<String>,
+        dayOfWeek: DayOfWeek,
+        referenceStopId: String? = null,
+        now: LocalDateTime = LocalDateTime.now()
     ): List<Departure> {
+        val cleanIds = routeIds.filter { it.isNotBlank() }.distinct()
+        if (cleanIds.isEmpty()) return emptyList()
+
         val db = databaseProvider.openReadOnly() ?: return emptyList()
         return try {
             val serviceToday = currentServiceDate(now)
@@ -624,10 +634,10 @@ class TransitScheduleRepository(
             val effectiveDate = if (dbCoversCandidate) {
                 candidateDate
             } else {
-                findFallbackDateForDayOfWeek(db, routeId, dayOfWeek) ?: candidateDate
+                findFallbackDateForDayOfWeek(db, cleanIds, dayOfWeek) ?: candidateDate
             }
 
-            val deps = queryRouteDeparturesForDate(db, routeId, effectiveDate, referenceStopId)
+            val deps = queryRoutesDeparturesForDate(db, cleanIds, effectiveDate, referenceStopId)
             deps.mapIndexed { idx, dep ->
                 dep.copy(
                     isLastFridayTrip = (dayOfWeek == DayOfWeek.FRIDAY && idx == deps.lastIndex),
@@ -639,34 +649,41 @@ class TransitScheduleRepository(
         }
     }
 
-    /**
-     * מחזיר מידע מדויק על הנסיעה הבאה של קו בתחנה: האם פעיל היום, האם הסתיים להיום,
-     * ומתי האוטובוס הבא (היום, מחר או ביום הפעיל הבא).
-     */
     fun getNextDepartureForLineAtStop(
         routeId: String,
         stopId: String? = null,
         now: LocalDateTime = LocalDateTime.now()
+    ): LineNextDepartureInfo = getNextDepartureForLineAtStop(listOf(routeId), stopId, now)
+
+    fun getNextDepartureForLineAtStop(
+        routeIds: List<String>,
+        stopId: String? = null,
+        now: LocalDateTime = LocalDateTime.now()
     ): LineNextDepartureInfo {
-        val db = databaseProvider.openReadOnly() ?: return LineNextDepartureInfo(
+        val cleanIds = routeIds.filter { it.isNotBlank() }.distinct()
+        val emptyResult = LineNextDepartureInfo(
             activeToday = false,
             todayServiceEnded = false,
             nextDepartureAt = null,
             nextTripId = null,
             isTomorrow = false,
-            nextDayOfWeek = null
+            nextDayOfWeek = null,
+            nextRouteId = null
         )
+        if (cleanIds.isEmpty()) return emptyResult
+
+        val db = databaseProvider.openReadOnly() ?: return emptyResult
 
         try {
             val serviceToday = currentServiceDate(now)
             val dbValidToday = isDatabaseValidOnDate(db, serviceToday)
 
             val todayDeps = if (dbValidToday) {
-                queryRouteDeparturesForDate(db, routeId, serviceToday, stopId)
+                queryRoutesDeparturesForDate(db, cleanIds, serviceToday, stopId)
             } else {
-                val fallback = findFallbackDateForDayOfWeek(db, routeId, serviceToday.dayOfWeek)
+                val fallback = findFallbackDateForDayOfWeek(db, cleanIds, serviceToday.dayOfWeek)
                 if (fallback != null) {
-                    queryRouteDeparturesForDate(db, routeId, fallback, stopId).map {
+                    queryRoutesDeparturesForDate(db, cleanIds, fallback, stopId).map {
                         it.copy(
                             serviceDate = serviceToday,
                             departureAt = serviceToday.atStartOfDay().plusSeconds(it.departureSeconds.toLong())
@@ -685,19 +702,19 @@ class TransitScheduleRepository(
                     nextDepartureAt = nextToday.departureAt,
                     nextTripId = nextToday.tripId,
                     isTomorrow = false,
-                    nextDayOfWeek = serviceToday.dayOfWeek
+                    nextDayOfWeek = serviceToday.dayOfWeek,
+                    nextRouteId = nextToday.routeId
                 )
             }
 
-            // לא נמצאה נסיעה נוספת בהמשך היום הנוכחי -> חיפוש ביום הפעיל הבא (1..7 ימים קדימה)
             for (offset in 1L..7L) {
                 val futureDate = serviceToday.plusDays(offset)
                 val futureDeps = if (isDatabaseValidOnDate(db, futureDate)) {
-                    queryRouteDeparturesForDate(db, routeId, futureDate, stopId)
+                    queryRoutesDeparturesForDate(db, cleanIds, futureDate, stopId)
                 } else if (!dbValidToday) {
-                    val fallback = findFallbackDateForDayOfWeek(db, routeId, futureDate.dayOfWeek)
+                    val fallback = findFallbackDateForDayOfWeek(db, cleanIds, futureDate.dayOfWeek)
                     if (fallback != null) {
-                        queryRouteDeparturesForDate(db, routeId, fallback, stopId).map {
+                        queryRoutesDeparturesForDate(db, cleanIds, fallback, stopId).map {
                             it.copy(
                                 serviceDate = futureDate,
                                 departureAt = futureDate.atStartOfDay().plusSeconds(it.departureSeconds.toLong())
@@ -714,7 +731,8 @@ class TransitScheduleRepository(
                         nextDepartureAt = firstFuture.departureAt,
                         nextTripId = firstFuture.tripId,
                         isTomorrow = (offset == 1L),
-                        nextDayOfWeek = futureDate.dayOfWeek
+                        nextDayOfWeek = futureDate.dayOfWeek,
+                        nextRouteId = firstFuture.routeId
                     )
                 }
             }
@@ -725,7 +743,8 @@ class TransitScheduleRepository(
                 nextDepartureAt = null,
                 nextTripId = null,
                 isTomorrow = false,
-                nextDayOfWeek = null
+                nextDayOfWeek = null,
+                nextRouteId = null
             )
         } finally {
             db.close()
@@ -738,6 +757,6 @@ class TransitScheduleRepository(
             2 -> DayOfWeek.SATURDAY
             else -> DayOfWeek.SUNDAY
         }
-        return getDeparturesForDayOfWeek(routeId, targetDay, referenceStopId)
+        return getDeparturesForDayOfWeek(listOf(routeId), targetDay, referenceStopId)
     }
 }
