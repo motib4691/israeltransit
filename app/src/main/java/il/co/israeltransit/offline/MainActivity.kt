@@ -30,7 +30,10 @@ import il.co.israeltransit.offline.maps.OfflineMapScreen
 sealed class AppScreen {
     data object Home : AppScreen()
     data class StopSearch(val initialStop: TransitRepository.TransitStop? = null) : AppScreen()
-    data class LineSearch(val initialLineNumber: String? = null) : AppScreen()
+    data class LineSearch(
+        val initialLineNumber: String? = null,
+        val initialRouteId: String? = null
+    ) : AppScreen()
     data class RoutePlanner(
         val initialOrigin: TransitRepository.TransitStop? = null,
         val initialDestination: TransitRepository.TransitStop? = null,
@@ -87,6 +90,9 @@ fun TransitApp() {
     val currentScreen = backStack.lastOrNull() ?: AppScreen.Home
     val stateHolder = rememberSaveableStateHolder()
 
+    fun screenStateKey(index: Int, screen: AppScreen): String =
+        "${index}_${screen.javaClass.name}"
+
     fun navigateTo(screen: AppScreen) {
         backStack.add(screen)
     }
@@ -94,14 +100,18 @@ fun TransitApp() {
     // כפתור אנדרואיד חוזר מסך אחד אחורה
     fun navigateBack() {
         if (backStack.size > 1) {
-            backStack.removeAt(backStack.lastIndex)
+            val poppedIndex = backStack.lastIndex
+            val poppedScreen = backStack.removeAt(poppedIndex)
+            stateHolder.removeState(screenStateKey(poppedIndex, poppedScreen))
         }
     }
 
     // כפתור מובנה במסך מחזיר ישירות למסך הבית
     fun navigateHome() {
         while (backStack.size > 1) {
-            backStack.removeAt(backStack.lastIndex)
+            val poppedIndex = backStack.lastIndex
+            val poppedScreen = backStack.removeAt(poppedIndex)
+            stateHolder.removeState(screenStateKey(poppedIndex, poppedScreen))
         }
     }
 
@@ -167,15 +177,21 @@ fun TransitApp() {
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background
             ) {
-                stateHolder.SaveableStateProvider(currentScreen.javaClass.name) {
+                val currentKey = screenStateKey(backStack.lastIndex.coerceAtLeast(0), currentScreen)
+                stateHolder.SaveableStateProvider(currentKey) {
                     when (val screen = currentScreen) {
                         is AppScreen.Home -> HomeScreen(onNavigate = { navigateTo(it) })
 
                         is AppScreen.StopSearch -> StopSearchScreen(
                             initialStop = screen.initialStop,
                             onBack = { navigateHome() },
-                            onNavigateToLine = { lineNumber ->
-                                navigateTo(AppScreen.LineSearch(lineNumber))
+                            onNavigateToLine = { routeId, lineNumber ->
+                                navigateTo(
+                                    AppScreen.LineSearch(
+                                        initialLineNumber = lineNumber,
+                                        initialRouteId = routeId
+                                    )
+                                )
                             },
                             onPlanRouteFrom = { stop ->
                                 navigateTo(
@@ -199,6 +215,7 @@ fun TransitApp() {
 
                         is AppScreen.LineSearch -> LineSearchScreen(
                             initialLine = screen.initialLineNumber,
+                            initialRouteId = screen.initialRouteId,
                             onBack = { navigateHome() },
                             onNavigateToStop = { stop ->
                                 navigateTo(AppScreen.StopSearch(initialStop = stop))
