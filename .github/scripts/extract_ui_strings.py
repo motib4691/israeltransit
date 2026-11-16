@@ -16,6 +16,10 @@ INTERPOLATION_PATTERN = re.compile(
 NON_COMPOSABLE_CONSTRUCTS = (
     "onClick", "onValueChange", "onCheckedChange", "onDismissRequest",
     "onLongClick", "onDoubleClick", "onClickLabel", "onAction",
+    "onResult", "onError", "onSuccess", "onDismiss", "onConfirm",
+    "onSelect", "onChange", "onQueryChange", "onActiveChange", "onSearch",
+    "onNavigate", "onBack", "onClose", "onSave", "onDelete", "onItemClick",
+    "factory", "update", "onRelease", "onReset",
     "LaunchedEffect", "SideEffect", "DisposableEffect",
     "remember", "rememberSaveable", "derivedStateOf", "rememberLauncherForActivityResult",
     "pointerInput", "clickable", "combinedClickable",
@@ -25,7 +29,7 @@ NON_COMPOSABLE_CONSTRUCTS = (
     "buildString", "apply", "also", "let", "run", "with"
 )
 
-FORBIDDEN_LINE_KEYWORDS = ("Toast", "Snackbar", "Log.", "const val", "throw ", "Exception(")
+FORBIDDEN_LINE_KEYWORDS = ("Toast", "Snackbar", "Log.", "const val", "throw ", "Exception(", "return@")
 
 def escape_android_xml(text, has_placeholders=False):
     if has_placeholders:
@@ -159,7 +163,6 @@ def main():
                 opens = clean_for_braces.count("{")
                 closes = clean_for_braces.count("}")
 
-                # בדיקה אם השורה מתחילה פונקציה רגילה (לא @Composable) בתוך פונקציית @Composable
                 is_local_non_composable_fun = (
                     in_composable
                     and not saw_composable_annotation
@@ -184,6 +187,11 @@ def main():
                             non_composable_depth = opens - closes
                         elif opens == 0:
                             pending_non_composable = True
+
+                    # אם אנחנו בתוך בלוק פנימי (עומק > 1) ומופיע חץ למבדה -> בשורה חדשה, נחסום עד סגירת הבלוק הנוכחי
+                    elif composable_depth > 1 and "->" in clean_for_braces and not saw_composable_annotation:
+                        in_non_composable = True
+                        non_composable_depth = 1 + (opens - closes)
 
                 elif pending_non_composable and opens > 0:
                     in_non_composable = True
