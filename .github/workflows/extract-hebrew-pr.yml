@@ -1,4 +1,4 @@
-name: Extract UI Hebrew Strings (PR + Test APK)
+name: Extract UI Hebrew Strings (PR + Trigger Build)
 
 on:
   workflow_dispatch:
@@ -6,9 +6,10 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
-  extract-and-build:
+  extract-and-trigger:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -17,34 +18,23 @@ jobs:
       - name: Run Hebrew UI extraction script
         run: python3 .github/scripts/extract_ui_strings.py
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build Debug APK to verify compilation
-        run: ./gradlew assembleDebug
-
-      - name: Upload Test APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug-i18n-test
-          path: app/build/outputs/apk/debug/*.apk
-
       - name: Create Pull Request
+        id: create_pr
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "Extract hardcoded Hebrew UI strings to strings.xml"
           title: "העברת כיתובי ממשק בעברית לקובץ strings.xml"
           body: |
-            תהליך זה חילץ אוטומטית את כיתובי הממשק בעברית מתוך קבצי ה-UI אל `app/src/main/res/values/strings.xml`, ואימת שהאפליקציה מתקמפלת בהצלחה.
+            תהליך זה חילץ אוטומטית את כיתובי הממשק בעברית מתוך קבצי ה-UI אל `app/src/main/res/values/strings.xml`, והפעיל אוטומטית את `build-app.yml` על ענף הבדיקה.
             
             * **לבדיקת השינויים בקוד:** עברו ללשונית **Files changed**.
-            * **להורדת גרסת בדיקה לטאבלט:** היכנסו לריצת ה-Action והורידו את `app-debug-i18n-test` תחת **Artifacts**.
+            * **להורדת ה-APK לבדיקה בטאבלט:** היכנסו ללשונית **Actions** > **Build Android APK** ובחרו בריצה שרצה על הענף `auto-i18n-hebrew`.
             * **לאישור סופי:** לחצו על **Merge pull request**.
           branch: auto-i18n-hebrew
           delete-branch: true
+
+      - name: Trigger build-app.yml on PR branch
+        if: steps.create_pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build-app.yml --ref auto-i18n-hebrew
