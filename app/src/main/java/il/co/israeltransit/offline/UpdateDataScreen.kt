@@ -244,7 +244,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (busy) "⏳ מתבצע ייבוא / עדכון..." else "מצב המערכת:",
+                        text = if (busy) stringResource(R.string.ui_3b48c7) else stringResource(R.string.ui_1976b5),
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
