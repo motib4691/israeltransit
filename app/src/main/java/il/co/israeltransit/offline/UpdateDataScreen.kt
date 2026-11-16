@@ -91,7 +91,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "ייבוא ועדכון נתונים",
+                text = stringResource(R.string.ui_78ffc2),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -105,7 +105,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
         }
 
         Text(
-            text = "מרכז ניהול קובצי הנתונים והמפה של האפליקציה לפעילות מלאה ללא אינטרנט.",
+            text = stringResource(R.string.ui_52fab6),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -122,7 +122,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                 Text(stringResource(R.string.ui_5d9aa0), fontWeight = FontWeight.Bold)
                 if (databaseAvailable) {
                     Text(stringResource(R.string.ui_f2a626), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text("עדכון אחרון: ${dateFormatter.format(Date(lastUpdate))}", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_a36186, dateFormatter.format(Date(lastUpdate))), style = MaterialTheme.typography.bodySmall)
                 } else {
                     Text(stringResource(R.string.ui_a22858), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
@@ -151,13 +151,13 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     Text(stringResource(R.string.ui_581f3d), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     if (addressesAvailable && walkingGraphAvailable) {
                         Text(
-                            text = "כולל חיפוש רחובות וכתובות ורשת ניווט להולכי רגל",
+                            text = stringResource(R.string.ui_ee2191),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            text = "הותקנה מפה בסיסית. ייבא את israel-map-pack.zip לתמיכה מלאה בחיפוש רחובות והליכה.",
+                            text = stringResource(R.string.ui_7fa78f),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )

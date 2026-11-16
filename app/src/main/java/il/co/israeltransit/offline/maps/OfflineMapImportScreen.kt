@@ -112,7 +112,7 @@ fun OfflineMapImportScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "מפה לא מקוונת",
+            text = stringResource(R.string.ui_1fa750),
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -129,7 +129,7 @@ fun OfflineMapImportScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "מצב המפה",
+                    text = stringResource(R.string.ui_46e08a),
                     style = MaterialTheme.typography.titleMedium
                 )
 
@@ -175,7 +175,7 @@ fun OfflineMapImportScreen(
             ) {
                 CircularProgressIndicator()
                 Text(
-                    text = "  מייבא ומאמת...",
+                    text = stringResource(R.string.ui_d15fd9),
                     modifier = Modifier.padding(8.dp)
                 )
             }
@@ -197,7 +197,7 @@ fun OfflineMapImportScreen(
 
         if (mapAvailable && !unavailableStorage && !busy) {
             Text(
-                text = "תצוגת המפה",
+                text = stringResource(R.string.ui_4dc4c7),
                 style = MaterialTheme.typography.titleMedium
             )
 
