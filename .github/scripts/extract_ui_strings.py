@@ -6,12 +6,27 @@ SRC_DIR = "app/src/main/java"
 STRINGS_FILE = "app/src/main/res/values/strings.xml"
 PACKAGE_NAME = "il.co.israeltransit.offline"
 
-HEBREW_STRING_PATTERN = re.compile(r'"([^"\n]*[\u0590-\u05FF][^"\n]*)"')
+# מחפש אך ורק קריאות ישירות לרכיב Text( "..." ) או Text( text = "..." )
+# כולל תמיכה במחרוזות עם \" כדי לזהות אותן ולדלג עליהן בבטחה
+SAFE_TEXT_CALL_PATTERN = re.compile(
+    r'(?<![A-Za-z0-9_])(Text\s*\(\s*(?:text\s*=\s*)?)"((?:\\.|[^"\\])*)"'
+)
 
-def escape_xml(text):
+HEBREW_CHAR_PATTERN = re.compile(r'[\u0590-\u05FF]')
+
+# מילות מפתח שאם הן מופיעות באותה שורה, לא מבצעים החלפה כדי למנוע הקשר לא-קומפוזבילי
+FORBIDDEN_LINE_KEYWORDS = (
+    "onClick", "LaunchedEffect", "SideEffect", "DisposableEffect",
+    "Toast", "Snackbar", "Log.", "//", "/*", "*"
+)
+
+def escape_android_xml(text):
+    # המרת תווים מיוחדים לפי תקן AAPT2 של אנדרואיד
     text = text.replace("&", "&amp;")
     text = text.replace("<", "&lt;").replace(">", "&gt;")
     text = text.replace("'", "\\'").replace('"', '\\"')
+    if text.startswith("@") or text.startswith("?"):
+        text = "\\" + text
     return text
 
 def get_existing_strings():
@@ -62,47 +77,35 @@ def main():
             with open(filepath, "r", encoding="utf-8") as f:
                 original_code = f.read()
 
+            # מעבד רק קבצים שבהם מוגדר Compose Text
             if "@Composable" not in original_code:
                 continue
 
             file_changed = False
-            pending_composable = False
-            in_composable_body = False
-            brace_depth = 0
             new_lines = []
 
             for line in original_code.splitlines():
                 stripped = line.strip()
 
-                if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*") or "Log." in stripped:
+                # דילוג מוחלט על שורות מסוכנות או הערות
+                if any(kw in stripped for kw in FORBIDDEN_LINE_KEYWORDS) or '"""' in line:
                     new_lines.append(line)
                     continue
 
-                if "@Composable" in stripped:
-                    pending_composable = True
-
-                open_braces = line.count("{")
-                close_braces = line.count("}")
-
-                if pending_composable and open_braces > 0:
-                    in_composable_body = True
-                    pending_composable = False
-                    brace_depth = open_braces - close_braces
-                elif in_composable_body:
-                    brace_depth += open_braces - close_braces
-
-                def replace_match(match):
+                def replace_safe_text(match):
                     nonlocal file_changed
-                    heb_text = match.group(1)
+                    prefix = match.group(1)   # למשל: Text( או Text(text = 
+                    heb_text = match.group(2) # התוכן שבתוך המירכאות
 
-                    if "$" in heb_text or "\\n" in heb_text:
+                    # חייב להכיל לפחות אות עברית אחת
+                    if not HEBREW_CHAR_PATTERN.search(heb_text):
                         return match.group(0)
 
-                    # מחליף אך ורק בתוך גוף של פונקציית @Composable
-                    if not in_composable_body:
+                    # דילוג על משתנים דינמיים ($), ירידות שורה (\n) או תווי בריחה מורכבים (\)
+                    if "$" in heb_text or "\\" in heb_text:
                         return match.group(0)
 
-                    xml_safe_text = escape_xml(heb_text)
+                    xml_safe_text = escape_android_xml(heb_text)
 
                     if xml_safe_text in text_to_id:
                         str_id = text_to_id[xml_safe_text]
@@ -113,13 +116,10 @@ def main():
                         new_entries.append(f'    <string name="{str_id}">{xml_safe_text}</string>')
 
                     file_changed = True
-                    return f"stringResource(R.string.{str_id})"
+                    return f"{prefix}stringResource(R.string.{str_id})"
 
-                updated_line = HEBREW_STRING_PATTERN.sub(replace_match, line)
+                updated_line = SAFE_TEXT_CALL_PATTERN.sub(replace_safe_text, line)
                 new_lines.append(updated_line)
-
-                if in_composable_body and brace_depth <= 0:
-                    in_composable_body = False
 
             if file_changed:
                 updated_code = "\n".join(new_lines)
@@ -134,7 +134,7 @@ def main():
         with open(STRINGS_FILE, "w", encoding="utf-8") as f:
             f.write(xml_content)
 
-    print(f"Extraction complete: {len(new_entries)} new strings across {modified_files_count} files.")
+    print(f"Safe extraction complete: {len(new_entries)} strings extracted across {modified_files_count} files.")
 
 if __name__ == "__main__":
     main()
