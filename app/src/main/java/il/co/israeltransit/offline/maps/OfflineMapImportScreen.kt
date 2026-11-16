@@ -1,5 +1,8 @@
 package il.co.israeltransit.offline.maps
 
+import androidx.compose.ui.res.stringResource
+import il.co.israeltransit.offline.R
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -60,7 +63,7 @@ fun OfflineMapImportScreen(
 
     var statusMessage by remember {
         mutableStateOf(
-            "בחר קובץ PMTiles מהמכשיר כדי להתקין את המפה."
+            stringResource(R.string.ui_730591)
         )
     }
 
@@ -88,7 +91,7 @@ fun OfflineMapImportScreen(
                 succeeded = false
 
                 statusMessage =
-                    "מייבא את קובץ המפה ומאמת אותו. אין לסגור את האפליקציה."
+                    stringResource(R.string.ui_e9ff06)
 
                 val result = withContext(Dispatchers.IO) {
                     mapStorage.importArchive(uri)
@@ -109,13 +112,13 @@ fun OfflineMapImportScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "מפה לא מקוונת",
+            text = stringResource(R.string.ui_1fa750),
             style = MaterialTheme.typography.headlineMedium
         )
 
         Text(
-            text = "המפה נשמרת באותו מיקום אחסון שנבחר עבור מאגר התחבורה. " +
-                "התקנת המפה היא אופציונלית ואינה חובה לשימוש באפליקציה."
+            text = stringResource(R.string.ui_c05256) +
+                stringResource(R.string.ui_25e18f)
         )
 
         Card(
@@ -126,24 +129,24 @@ fun OfflineMapImportScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "מצב המפה",
+                    text = stringResource(R.string.ui_46e08a),
                     style = MaterialTheme.typography.titleMedium
                 )
 
                 if (unavailableStorage) {
                     Text(
-                        text = "מיקום האחסון שנבחר אינו זמין. " +
-                            "חבר מחדש את כרטיס הזיכרון.",
+                        text = stringResource(R.string.ui_33b280) +
+                            stringResource(R.string.ui_93d994),
                         color = MaterialTheme.colorScheme.error
                     )
                 } else if (mapAvailable) {
-                    Text("קובץ מפה מותקן")
+                    Text(stringResource(R.string.ui_b1973c))
                     Text(
-                        text = "גודל הקובץ: " +
+                        text = stringResource(R.string.ui_f770cd) +
                             formatMapSize(mapFile.length())
                     )
                 } else {
-                    Text("עדיין לא הותקן קובץ מפה.")
+                    Text(stringResource(R.string.ui_b62ba2))
                 }
 
                 Button(
@@ -159,7 +162,7 @@ fun OfflineMapImportScreen(
                     enabled = !busy && !unavailableStorage,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("בחירת קובץ מפה מהמכשיר")
+                    Text(stringResource(R.string.ui_9ecf70))
                 }
             }
         }
@@ -172,7 +175,7 @@ fun OfflineMapImportScreen(
             ) {
                 CircularProgressIndicator()
                 Text(
-                    text = "  מייבא ומאמת...",
+                    text = stringResource(R.string.ui_d15fd9),
                     modifier = Modifier.padding(8.dp)
                 )
             }
@@ -194,7 +197,7 @@ fun OfflineMapImportScreen(
 
         if (mapAvailable && !unavailableStorage && !busy) {
             Text(
-                text = "תצוגת המפה",
+                text = stringResource(R.string.ui_4dc4c7),
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -221,7 +224,7 @@ fun OfflineMapImportScreen(
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("חזרה")
+            Text(stringResource(R.string.ui_b95e2a))
         }
     }
 }

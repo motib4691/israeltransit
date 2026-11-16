@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -148,7 +150,7 @@ fun TransitApp() {
                     },
                     shape = RoundedCornerShape(20.dp)
                 ) {
-                    Text("עדכון נתונים")
+                    Text(stringResource(R.string.ui_089fec))
                 }
             },
             dismissButton = {
@@ -159,12 +161,12 @@ fun TransitApp() {
                             clockAlert = null
                         }
                     ) {
-                        Text("אל תראה שוב")
+                        Text(stringResource(R.string.ui_d54503))
                     }
                     TextButton(
                         onClick = { clockAlert = null }
                     ) {
-                        Text("סגור")
+                        Text(stringResource(R.string.ui_602b2e))
                     }
                 }
             }
@@ -329,13 +331,13 @@ private data class HomeMenuItemData(
 @Composable
 private fun HomeScreen(onNavigate: (AppScreen) -> Unit) {
     val items = listOf(
-        HomeMenuItemData("תכנון מסלול", "מציאת מסלול נסיעה בין שתי נקודות", AppScreen.RoutePlanner(), "🧭"),
-        HomeMenuItemData("חיפוש קו", "חיפוש קווים לפי מספר, עיר ומפעיל", AppScreen.LineSearch(), "🚌"),
-        HomeMenuItemData("חיפוש תחנה", "איתור תחנות וקווים העוברים בהן", AppScreen.StopSearch(), "🚏"),
-        HomeMenuItemData("מפה לא מקוונת", "מפה אינטראקטיבית, איתור תחנות וערי ישראל", AppScreen.OfflineMap, "🗺️"),
-        HomeMenuItemData("התחנות שלי", "התחנות ששמרת לשימוש מהיר", AppScreen.SavedStops, "⭐"),
-        HomeMenuItemData("עדכון נתונים", "ייבוא ועדכון מאגר התחבורה וקובץ המפה", AppScreen.UpdateData, "🔄"),
-        HomeMenuItemData("הגדרות", "התאמת החלפות, מרווחים, רטט בירידה ומראה", AppScreen.Settings, "⚙️")
+        HomeMenuItemData(stringResource(R.string.ui_b2c126), stringResource(R.string.ui_ebb785), AppScreen.RoutePlanner(), "🧭"),
+        HomeMenuItemData(stringResource(R.string.ui_44a8a7), stringResource(R.string.ui_12c6c3), AppScreen.LineSearch(), "🚌"),
+        HomeMenuItemData(stringResource(R.string.ui_07ae91), stringResource(R.string.ui_dcb4a0), AppScreen.StopSearch(), "🚏"),
+        HomeMenuItemData(stringResource(R.string.ui_1fa750), stringResource(R.string.ui_8a09f4), AppScreen.OfflineMap, "🗺️"),
+        HomeMenuItemData(stringResource(R.string.ui_95c036), stringResource(R.string.ui_83c566), AppScreen.SavedStops, "⭐"),
+        HomeMenuItemData(stringResource(R.string.ui_089fec), stringResource(R.string.ui_831c6b), AppScreen.UpdateData, "🔄"),
+        HomeMenuItemData(stringResource(R.string.ui_089b78), stringResource(R.string.ui_df1144), AppScreen.Settings, "⚙️")
     )
 
     Column(
@@ -362,7 +364,7 @@ private fun HomeScreen(onNavigate: (AppScreen) -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "תחבורה ציבורית לא-מקוונת בישראל",
+                    text = stringResource(R.string.ui_674858),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

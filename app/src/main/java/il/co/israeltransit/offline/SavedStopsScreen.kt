@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -170,7 +172,7 @@ fun SavedStopsScreen(
             },
             title = {
                 Text(
-                    text = if (isEditing) "שינוי שם התחנה" else "שמירת תחנה",
+                    text = if (isEditing) stringResource(R.string.ui_2b907a) else stringResource(R.string.ui_253a4a),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -179,7 +181,7 @@ fun SavedStopsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stopName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(
-                        "מספר תחנה (מק\"ט): $stopCode",
+                        stringResource(R.string.ui_beedd2)ט): $stopCode",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium
@@ -188,7 +190,7 @@ fun SavedStopsScreen(
                     OutlinedTextField(
                         value = customName,
                         onValueChange = { customName = it },
-                        label = { Text("שם אישי, למשל בית או עבודה") },
+                        label = { Text(stringResource(R.string.ui_0f9fe3)) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -220,7 +222,7 @@ fun SavedStopsScreen(
                     shape = RoundedCornerShape(20.dp),
                     enabled = customName.trim().isNotEmpty()
                 ) {
-                    Text("שמירה")
+                    Text(stringResource(R.string.ui_287524))
                 }
             },
             dismissButton = {
@@ -230,7 +232,7 @@ fun SavedStopsScreen(
                         editingStop = null
                     }
                 ) {
-                    Text("ביטול")
+                    Text(stringResource(R.string.ui_5fac05))
                 }
             }
         )
@@ -250,7 +252,7 @@ fun SavedStopsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "התחנות שלי",
+                stringResource(R.string.ui_95c036),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -260,12 +262,12 @@ fun SavedStopsScreen(
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה למסך הבית")
+                Text(stringResource(R.string.ui_55a91f))
             }
         }
 
         Text(
-            text = "שמור תחנות חשובות עם שם אישי כדי למצוא אותן ולתכנן אליהן מסלולים במהירות.",
+            text = stringResource(R.string.ui_78f784),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -274,7 +276,7 @@ fun SavedStopsScreen(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("חיפוש תחנה להוספה (לפי שם או מק\"ט)") },
+            label = { Text(stringResource(R.string.ui_0c8cc1)ט)") },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             trailingIcon = {
@@ -285,14 +287,14 @@ fun SavedStopsScreen(
         )
 
         if (!database.isDatabaseAvailable()) {
-            Text("יש להתקין תחילה מאגר נתונים במסך עדכון נתונים.")
+            Text(stringResource(R.string.ui_7746fd))
         } else if (searching) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 CircularProgressIndicator()
             }
         } else if (query.isNotBlank()) {
             if (searchResults.isEmpty()) {
-                Text("לא נמצאו תחנות מתאימות.")
+                Text(stringResource(R.string.ui_1c603b))
             }
 
             searchResults.forEach { stop ->
@@ -309,7 +311,7 @@ fun SavedStopsScreen(
                     ) {
                         Text(stop.name, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
                         Text(
-                            "מספר תחנה (מק\"ט): ${stop.stopCode}",
+                            stringResource(R.string.ui_beedd2)ט): ${stop.stopCode}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
@@ -325,7 +327,7 @@ fun SavedStopsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(if (alreadySaved) "עדכון השם האישי" else "⭐ הוספה לתחנות שלי")
+                            Text(if (alreadySaved) stringResource(R.string.ui_8b9d00) else stringResource(R.string.ui_069644))
                         }
                     }
                 }
@@ -335,7 +337,7 @@ fun SavedStopsScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            "התחנות השמורות",
+            stringResource(R.string.ui_811bde),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -348,7 +350,7 @@ fun SavedStopsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "עדיין לא שמרת תחנות. חפש תחנה בשדה למעלה והוסף אותה לרשימה.",
+                    text = stringResource(R.string.ui_639e3b),
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -433,7 +435,7 @@ fun SavedStopsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("שינוי שם", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_09bd0f), fontSize = 12.sp)
                         }
 
                         OutlinedButton(
@@ -443,7 +445,7 @@ fun SavedStopsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("הסרה", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_e4844e), fontSize = 12.sp)
                         }
                     }
                 }
