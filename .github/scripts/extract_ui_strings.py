@@ -12,17 +12,20 @@ INTERPOLATION_PATTERN = re.compile(
     r'\$(?:\{([A-Za-z0-9_.\(\)]+)\}|([A-Za-z_][A-Za-z0-9_]*))'
 )
 
-# בלוקים שיכולים להופיע בתוך @Composable אך הקוד בתוכם אינו בהקשר @Composable
-NON_COMPOSABLE_LAMBDAS = (
+# כל בלוק פנימי או קריאה שאינם ציור ממשק UI ישיר
+NON_COMPOSABLE_CONSTRUCTS = (
     "onClick", "onValueChange", "onCheckedChange", "onDismissRequest",
-    "onLongClick", "onDoubleClick", "onClickLabel",
+    "onLongClick", "onDoubleClick", "onClickLabel", "onAction",
     "LaunchedEffect", "SideEffect", "DisposableEffect",
-    "remember", "rememberSaveable", "derivedStateOf",
+    "remember", "rememberSaveable", "derivedStateOf", "rememberLauncherForActivityResult",
     "pointerInput", "clickable", "combinedClickable",
-    "Comparator", "sortedBy", "filter", "map", "forEach"
+    "AndroidView", "Canvas", "drawScope", "launch", "withContext", "async",
+    "Comparator", "sortedBy", "sortedWith", "filter", "map", "mapNotNull",
+    "forEach", "forEachIndexed", "firstOrNull", "find", "any", "all", "none",
+    "buildString", "apply", "also", "let", "run", "with"
 )
 
-FORBIDDEN_LINE_KEYWORDS = ("Toast", "Snackbar", "Log.", "const val")
+FORBIDDEN_LINE_KEYWORDS = ("Toast", "Snackbar", "Log.", "const val", "throw ", "Exception(")
 
 def escape_android_xml(text, has_placeholders=False):
     if has_placeholders:
@@ -70,13 +73,11 @@ def ensure_imports(code):
     return "\n".join(lines)
 
 def strip_comments_and_strings_for_braces(line):
-    # מנקה הערות ומחרוזות כדי לספור סוגריים { } בצורה מדויקת
     line = re.sub(r'//.*$', '', line)
     line = re.sub(r'"(?:\\.|[^"\\])*"', '""', line)
     return line
 
 def parse_interpolated_string(raw_text):
-    # התרת ראשי תיבות עם \" תוך המשך חסימה של \n, \t וכו'
     unescaped = raw_text.replace('\\"', '"')
     if "\\" in unescaped:
         return None, None
@@ -127,8 +128,8 @@ def main():
             file_changed = False
             new_lines = []
 
-            # מעקב מצב מדויק לכל שורה
             in_block_comment = False
+            saw_composable_annotation = False
             pending_composable = False
             composable_depth = 0
             in_composable = False
@@ -154,16 +155,30 @@ def main():
                     new_lines.append(line)
                     continue
 
-                if "@Composable" in stripped:
-                    pending_composable = True
-
                 clean_for_braces = strip_comments_and_strings_for_braces(line)
                 opens = clean_for_braces.count("{")
                 closes = clean_for_braces.count("}")
 
+                # בדיקה אם השורה מתחילה פונקציה רגילה (לא @Composable) בתוך פונקציית @Composable
+                is_local_non_composable_fun = (
+                    in_composable
+                    and not saw_composable_annotation
+                    and re.search(r'\bfun\s+[A-Za-z0-9_]+', clean_for_braces) is not None
+                )
+
+                if "@Composable" in clean_for_braces:
+                    saw_composable_annotation = True
+                    if not in_composable:
+                        pending_composable = True
+
                 # זיהוי כניסה לבלוק לא-קומפוזבילי בתוך פונקציית מסך
                 if in_composable and not in_non_composable:
-                    if any(re.search(rf'\b{kw}\b', clean_for_braces) for kw in NON_COMPOSABLE_LAMBDAS):
+                    has_blocked_construct = (
+                        is_local_non_composable_fun
+                        or any(re.search(rf'\b{kw}\b', clean_for_braces) for kw in NON_COMPOSABLE_CONSTRUCTS)
+                        or ("->" in clean_for_braces and not saw_composable_annotation)
+                    )
+                    if has_blocked_construct:
                         if opens > closes:
                             in_non_composable = True
                             non_composable_depth = opens - closes
@@ -185,11 +200,13 @@ def main():
                 if pending_composable and opens > 0:
                     in_composable = True
                     pending_composable = False
+                    saw_composable_annotation = False
                     composable_depth = opens - closes
                 elif in_composable:
                     composable_depth += opens - closes
+                    if opens > 0:
+                        saw_composable_annotation = False
 
-                # ביצוע ההחלפה רק אם אנחנו בתוך @Composable ולא בתוך בלוק חסום
                 can_replace = (
                     in_composable
                     and not in_non_composable
@@ -205,7 +222,6 @@ def main():
                         if not HEBREW_CHAR_PATTERN.search(raw_text):
                             return match.group(0)
 
-                        # דילוג על שרשור מחרוזות ישיר עם + שעלול לשבור טיפוסים
                         after = line[match.end():match.end() + 5].lstrip()
                         before = line[:match.start()].rstrip()
                         if after.startswith("+") or before.endswith("+"):
@@ -238,6 +254,7 @@ def main():
                     composable_depth = 0
                     in_non_composable = False
                     pending_non_composable = False
+                    saw_composable_annotation = False
 
             if file_changed:
                 updated_code = "\n".join(new_lines)
@@ -252,7 +269,7 @@ def main():
         with open(STRINGS_FILE, "w", encoding="utf-8") as f:
             f.write(xml_content)
 
-    print(f"Stage 1 extraction complete: {len(new_entries)} new strings across {modified_files_count} files.")
+    print(f"Stage 1 safe extraction complete: {len(new_entries)} new strings across {modified_files_count} files.")
 
 if __name__ == "__main__":
     main()
