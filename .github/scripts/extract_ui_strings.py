@@ -6,15 +6,7 @@ SRC_DIR = "app/src/main/java"
 STRINGS_FILE = "app/src/main/res/values/strings.xml"
 PACKAGE_NAME = "il.co.israeltransit.offline"
 
-# מחפש מחרוזות במרכאות המכילות לפחות אות אחת בעברית
 HEBREW_STRING_PATTERN = re.compile(r'"([^"\n]*[\u0590-\u05FF][^"\n]*)"')
-
-# מילות מפתח של רכיבי ממשק ב-Jetpack Compose כדי להבטיח שמחליפים רק טקסט תצוגה
-UI_CONTEXT_KEYWORDS = (
-    "Text(", "text =", "text=", "title =", "title=", "label =", "label=",
-    "placeholder =", "placeholder=", "contentDescription =", "contentDescription=",
-    "HomeMenuItemData(", "Snackbar", "Toast"
-)
 
 def escape_xml(text):
     text = text.replace("&", "&amp;")
@@ -37,27 +29,25 @@ def ensure_imports(code):
     
     lines = code.splitlines()
     insert_idx = 0
+    is_root_package = False
+
     for i, line in enumerate(lines):
-        if line.startswith("package "):
+        stripped = line.strip()
+        if stripped.startswith("package "):
             insert_idx = i + 1
+            if stripped == f"package {PACKAGE_NAME}":
+                is_root_package = True
             break
 
     additions = []
     if import_res not in code:
         additions.append(import_res)
-    if import_r not in code and f"package {PACKAGE_NAME}" not in code:
+    if not is_root_package and import_r not in code:
         additions.append(import_r)
 
     if additions:
         lines[insert_idx:insert_idx] = [""] + additions
     return "\n".join(lines)
-
-def is_ui_file(filepath, code):
-    # מעבד רק קבצי מסכים או קבצים שמכילים רכיבי Composable
-    filename = os.path.basename(filepath)
-    if filename == "MainActivity.kt" or filename.endswith("Screen.kt"):
-        return True
-    return "@Composable" in code
 
 def main():
     text_to_id, xml_content = get_existing_strings()
@@ -72,39 +62,44 @@ def main():
             with open(filepath, "r", encoding="utf-8") as f:
                 original_code = f.read()
 
-            if not is_ui_file(filepath, original_code):
+            if "@Composable" not in original_code:
                 continue
 
             file_changed = False
-            in_composable_block = False
+            pending_composable = False
+            in_composable_body = False
             brace_depth = 0
             new_lines = []
 
             for line in original_code.splitlines():
                 stripped = line.strip()
 
-                # דילוג על הערות קוד ולוגים
                 if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*") or "Log." in stripped:
                     new_lines.append(line)
                     continue
 
                 if "@Composable" in stripped:
-                    in_composable_block = True
-                    brace_depth = 0
+                    pending_composable = True
 
-                if in_composable_block:
-                    brace_depth += line.count("{") - line.count("}")
+                open_braces = line.count("{")
+                close_braces = line.count("}")
+
+                if pending_composable and open_braces > 0:
+                    in_composable_body = True
+                    pending_composable = False
+                    brace_depth = open_braces - close_braces
+                elif in_composable_body:
+                    brace_depth += open_braces - close_braces
 
                 def replace_match(match):
                     nonlocal file_changed
                     heb_text = match.group(1)
 
-                    # דילוג על מחרוזות עם משתנים דינמיים ($) או ירידות שורה
                     if "$" in heb_text or "\\n" in heb_text:
                         return match.group(0)
 
-                    # מוודא שאנחנו בתוך בלוק ממשק או שורת UI מובהקת
-                    if not in_composable_block and not any(kw in line for kw in UI_CONTEXT_KEYWORDS):
+                    # מחליף אך ורק בתוך גוף של פונקציית @Composable
+                    if not in_composable_body:
                         return match.group(0)
 
                     xml_safe_text = escape_xml(heb_text)
@@ -123,8 +118,8 @@ def main():
                 updated_line = HEBREW_STRING_PATTERN.sub(replace_match, line)
                 new_lines.append(updated_line)
 
-                if in_composable_block and brace_depth <= 0 and "}" in line:
-                    in_composable_block = False
+                if in_composable_body and brace_depth <= 0:
+                    in_composable_body = False
 
             if file_changed:
                 updated_code = "\n".join(new_lines)
