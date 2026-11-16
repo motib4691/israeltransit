@@ -364,7 +364,7 @@ private fun HomeScreen(onNavigate: (AppScreen) -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "תחבורה ציבורית לא-מקוונת בישראל",
+                    text = stringResource(R.string.ui_674858),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

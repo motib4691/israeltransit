@@ -181,7 +181,7 @@ fun SavedStopsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stopName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(
-                        "מספר תחנה (מק\"ט): $stopCode",
+                        stringResource(R.string.ui_5d32ff, stopCode),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium
@@ -252,7 +252,7 @@ fun SavedStopsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "התחנות שלי",
+                stringResource(R.string.ui_95c036),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -267,7 +267,7 @@ fun SavedStopsScreen(
         }
 
         Text(
-            text = "שמור תחנות חשובות עם שם אישי כדי למצוא אותן ולתכנן אליהן מסלולים במהירות.",
+            text = stringResource(R.string.ui_78f784),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -276,7 +276,7 @@ fun SavedStopsScreen(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("חיפוש תחנה להוספה (לפי שם או מק\"ט)") },
+            label = { Text(stringResource(R.string.ui_9f6cb2)) },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             trailingIcon = {
@@ -311,7 +311,7 @@ fun SavedStopsScreen(
                     ) {
                         Text(stop.name, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
                         Text(
-                            "מספר תחנה (מק\"ט): ${stop.stopCode}",
+                            stringResource(R.string.ui_5d32ff, stop.stopCode),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
@@ -337,7 +337,7 @@ fun SavedStopsScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            "התחנות השמורות",
+            stringResource(R.string.ui_811bde),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -350,7 +350,7 @@ fun SavedStopsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "עדיין לא שמרת תחנות. חפש תחנה בשדה למעלה והוסף אותה לרשימה.",
+                    text = stringResource(R.string.ui_639e3b),
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -381,7 +381,7 @@ fun SavedStopsScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "תחנה ${stop.stopCode}",
+                            text = stringResource(R.string.ui_cbe9f7, stop.stopCode),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )

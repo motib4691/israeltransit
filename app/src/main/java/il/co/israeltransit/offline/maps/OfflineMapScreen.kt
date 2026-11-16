@@ -55,13 +55,13 @@ fun OfflineMapScreen(
                     modifier = Modifier.padding(20.dp)
                 ) {
                     Text(
-                        text = "חבילת המפה הלא-מקוונת אינה מותקנת",
+                        text = stringResource(R.string.ui_1ea81d),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "כדי לצפות במפה ללא אינטרנט, ייבא את קובץ israel-map-pack.zip במסך 'עדכון נתונים'.",
+                        text = stringResource(R.string.ui_d15082),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(modifier = Modifier.height(16.dp))

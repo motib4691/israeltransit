@@ -454,7 +454,7 @@ fun RoutePlannerScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "מחיר הנסיעה: ${fare.priceNis} ₪",
+                        stringResource(R.string.ui_0e4472, fare.priceNis),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = MaterialTheme.colorScheme.primary
@@ -759,7 +759,7 @@ fun RoutePlannerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "פירוט מסלול נסיעה",
+                    stringResource(R.string.ui_1a22ab),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -772,7 +772,7 @@ fun RoutePlannerScreen(
             }
 
             Text(
-                "${journey.departureAt.format(plannerTimeFormatter)} – ${journey.arrivalAt.format(plannerTimeFormatter)} (${journey.durationMinutes} דקות)",
+                stringResource(R.string.ui_95f2be, journey.departureAt.format(plannerTimeFormatter), journey.arrivalAt.format(plannerTimeFormatter), journey.durationMinutes),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -823,7 +823,7 @@ fun RoutePlannerScreen(
                     onClick = { fareInfoToShow = fare },
                     shape = RoundedCornerShape(20.dp)
                 ) {
-                    Text("💳 תעריף: ${fare.priceNis} ₪", fontSize = 12.sp)
+                    Text(stringResource(R.string.ui_d10b6d, fare.priceNis), fontSize = 12.sp)
                 }
             }
 
@@ -849,7 +849,7 @@ fun RoutePlannerScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                "🚶 הליכה אל תחנת העלייה (${iw.toStopName})",
+                                stringResource(R.string.ui_41fa60, iw.toStopName),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.5.sp,
                                 color = MaterialTheme.colorScheme.secondary
@@ -857,7 +857,7 @@ fun RoutePlannerScreen(
                             Text(if (showInitWalkDetails) "▲" else "▼", fontSize = 11.sp)
                         }
                         Text(
-                            "מ־${iw.fromName} אל ${iw.toStopName} • כ-$distMeters מ' (כ-${iw.walkMinutes} דק')",
+                            stringResource(R.string.ui_4dac3d, iw.fromName, iw.toStopName, distMeters, iw.walkMinutes),
                             style = MaterialTheme.typography.bodySmall
                         )
                         AnimatedVisibility(visible = showInitWalkDetails && ghWalk != null && ghWalk.instructions.isNotEmpty()) {
@@ -916,7 +916,7 @@ fun RoutePlannerScreen(
                         }
 
                         Text(
-                            "• עליה בתחנה: ${leg.fromStopName} > בשעה ${leg.departureAt.format(plannerTimeFormatter)}",
+                            stringResource(R.string.ui_d8e898, leg.fromStopName, leg.departureAt.format(plannerTimeFormatter)),
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -934,7 +934,7 @@ fun RoutePlannerScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "נסיעה ➔ לחץ לרשימת תחנות הביניים",
+                                    stringResource(R.string.ui_a23664),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
@@ -961,7 +961,7 @@ fun RoutePlannerScreen(
                         }
 
                         Text(
-                            "• ירידה בתחנה: ${leg.toStopName} > בשעה ${leg.arrivalAt.format(plannerTimeFormatter)}",
+                            stringResource(R.string.ui_10a009, leg.toStopName, leg.arrivalAt.format(plannerTimeFormatter)),
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -982,8 +982,8 @@ fun RoutePlannerScreen(
                     ) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (sameStop) {
-                                Text("החלפה באותה תחנה (${leg.toStopName})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Text("המתנה לקו ${nextLeg.lineNumber}: כ-${waitMinutes} דקות", style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.ui_31b21f, leg.toStopName), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(stringResource(R.string.ui_6da8c7, nextLeg.lineNumber, waitMinutes), style = MaterialTheme.typography.bodySmall)
                             } else {
                                 val transferDist = ghTransfer?.distanceMeters?.roundToInt()
                                 val distText = if (transferDist != null) " (כ-$transferDist מ')" else ""
@@ -994,7 +994,7 @@ fun RoutePlannerScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        "🚶 הליכה בין תחנות ההחלפה$distText ➔ לחץ להוראות",
+                                        stringResource(R.string.ui_b211a8, distText),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.secondary
@@ -1012,13 +1012,13 @@ fun RoutePlannerScreen(
                                                 Text("${idx + 1}. ${inst.text}$d", style = MaterialTheme.typography.bodySmall)
                                             }
                                         } else {
-                                            Text("1. צא מ-${leg.toStopName} והתקדם ברגל ברחוב", style = MaterialTheme.typography.bodySmall)
+                                            Text(stringResource(R.string.ui_0283fb, leg.toStopName), style = MaterialTheme.typography.bodySmall)
                                             Text(stringResource(R.string.ui_b42667), style = MaterialTheme.typography.bodySmall)
-                                            Text("3. הגע לרציף תחנת ${nextLeg.fromStopName}", style = MaterialTheme.typography.bodySmall)
+                                            Text(stringResource(R.string.ui_bea720, nextLeg.fromStopName), style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                 }
-                                Text("המתנה משוערת לקו ${nextLeg.lineNumber}: כ-${waitMinutes} דקות", style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.ui_daf8c5, nextLeg.lineNumber, waitMinutes), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -1051,7 +1051,7 @@ fun RoutePlannerScreen(
                             }
                         }
                         Text(
-                            "כ-$distMeters מטרים (כ-${walk.walkMinutes} דקות) מ־${walk.fromStopName} אל ${walk.toStopName}",
+                            stringResource(R.string.ui_dfaa47, distMeters, walk.walkMinutes, walk.fromStopName, walk.toStopName),
                             style = MaterialTheme.typography.bodySmall
                         )
                         AnimatedVisibility(visible = showFinalWalkDetails && ghFinal != null && ghFinal.instructions.isNotEmpty()) {
@@ -1132,7 +1132,7 @@ fun RoutePlannerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "תכנון מסלול",
+                stringResource(R.string.ui_b2c126),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -1286,9 +1286,9 @@ fun RoutePlannerScreen(
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 if (group.stop2 != null) {
-                                    Text("תחנה דו-כיוונית (מק\"ט ${group.stop1.stopCode} / ${group.stop2.stopCode})", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text(stringResource(R.string.ui_41b1a8, group.stop1.stopCode, group.stop2.stopCode), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                 } else {
-                                    Text("תחנה ${group.stop1.stopCode}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                                    Text(stringResource(R.string.ui_cbe9f7, group.stop1.stopCode), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                                 }
                             }
                         }
@@ -1468,9 +1468,9 @@ fun RoutePlannerScreen(
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 if (group.stop2 != null) {
-                                    Text("תחנה דו-כיוונית (מק\"ט ${group.stop1.stopCode} / ${group.stop2.stopCode})", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text(stringResource(R.string.ui_41b1a8, group.stop1.stopCode, group.stop2.stopCode), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                 } else {
-                                    Text("תחנה ${group.stop1.stopCode}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                                    Text(stringResource(R.string.ui_cbe9f7, group.stop1.stopCode), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                                 }
                             }
                         }
@@ -1598,7 +1598,7 @@ fun RoutePlannerScreen(
                             ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(
-                                        "${journey.durationMinutes} דק'",
+                                        stringResource(R.string.ui_c16405, journey.durationMinutes),
                                         fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary
@@ -1629,7 +1629,7 @@ fun RoutePlannerScreen(
                                         fontSize = 14.sp
                                     )
                                     Text(
-                                        "עוד $diffMin דקות",
+                                        stringResource(R.string.ui_132113, diffMin),
                                         color = Color(0xFF2E7D32),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
@@ -1645,20 +1645,20 @@ fun RoutePlannerScreen(
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                     journey.initialWalk?.let { iw ->
                                         Text(
-                                            "• הליכה כ-${iw.walkMinutes} דק' (${iw.distanceMeters.roundToInt()} מ') אל תחנת ${iw.toStopName}",
+                                            stringResource(R.string.ui_be3f05, iw.walkMinutes, iw.distanceMeters.roundToInt(), iw.toStopName),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.secondary
                                         )
                                     }
                                     journey.legs.forEach { leg ->
                                         Text(
-                                            "• קו ${leg.lineNumber} מ-${leg.fromStopName} ל-${leg.toStopName}",
+                                            stringResource(R.string.ui_936a88, leg.lineNumber, leg.fromStopName, leg.toStopName),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
                                     journey.finalWalk?.let { fw ->
                                         Text(
-                                            "• הליכה מסכמת כ-${fw.walkMinutes} דק' (${fw.distanceMeters.roundToInt()} מ') אל ${fw.toStopName}",
+                                            stringResource(R.string.ui_9fc0bb, fw.walkMinutes, fw.distanceMeters.roundToInt(), fw.toStopName),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.secondary
                                         )
