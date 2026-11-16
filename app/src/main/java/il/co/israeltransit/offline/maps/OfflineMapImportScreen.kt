@@ -1,5 +1,8 @@
 package il.co.israeltransit.offline.maps
 
+import androidx.compose.ui.res.stringResource
+import il.co.israeltransit.offline.R
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -137,13 +140,13 @@ fun OfflineMapImportScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                 } else if (mapAvailable) {
-                    Text("קובץ מפה מותקן")
+                    Text(stringResource(R.string.ui_b1973c))
                     Text(
                         text = "גודל הקובץ: " +
                             formatMapSize(mapFile.length())
                     )
                 } else {
-                    Text("עדיין לא הותקן קובץ מפה.")
+                    Text(stringResource(R.string.ui_b62ba2))
                 }
 
                 Button(
@@ -159,7 +162,7 @@ fun OfflineMapImportScreen(
                     enabled = !busy && !unavailableStorage,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("בחירת קובץ מפה מהמכשיר")
+                    Text(stringResource(R.string.ui_9ecf70))
                 }
             }
         }
@@ -221,7 +224,7 @@ fun OfflineMapImportScreen(
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("חזרה")
+            Text(stringResource(R.string.ui_b95e2a))
         }
     }
 }

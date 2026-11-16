@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
@@ -596,7 +598,7 @@ fun StopSearchScreen(
         AlertDialog(
             onDismissRequest = { showPlatformPickerDialog = false },
             title = {
-                Text("בחירת רציף", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.ui_199501), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             },
             text = {
                 Column(
@@ -670,14 +672,14 @@ fun StopSearchScreen(
     historyItemToDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { historyItemToDelete = null },
-            title = { Text("מחיקת פריט מההיסטוריה") },
+            title = { Text(stringResource(R.string.ui_4df88a)) },
             text = { Text("האם למחוק את \"$item\" מרשימת החיפושים האחרונים?") },
             confirmButton = {
                 TextButton(onClick = {
                     SearchHistoryHelper.removeHistory(context, "stop_history", item)
                     searchHistory = SearchHistoryHelper.getHistory(context, "stop_history")
                     historyItemToDelete = null
-                }) { Text("מחק") }
+                }) { Text(stringResource(R.string.ui_07aecd)) }
             },
             dismissButton = {
                 TextButton(onClick = { historyItemToDelete = null }) { Text("ביטול") }
@@ -707,7 +709,7 @@ fun StopSearchScreen(
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("יציאה ממסך מלא")
+                Text(stringResource(R.string.ui_28ae89))
             }
         }
         return
@@ -741,7 +743,7 @@ fun StopSearchScreen(
             )
 
             if (query.isBlank() && searchHistory.isNotEmpty()) {
-                Text("חיפושים אחרונים (לחיצה ארוכה למחיקה):", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                Text(stringResource(R.string.ui_4ef76b), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     searchHistory.forEach { item ->
                         Surface(
@@ -872,7 +874,7 @@ fun StopSearchScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("⭐ לתחנות שלי", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_96bfed), fontSize = 12.sp)
                         }
 
                         if (oppositeStop != null) {
@@ -885,7 +887,7 @@ fun StopSearchScreen(
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("תחנה נגדית ⟷", fontSize = 12.sp)
+                                Text(stringResource(R.string.ui_450f79), fontSize = 12.sp)
                             }
                         }
                     }
@@ -918,13 +920,13 @@ fun StopSearchScreen(
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("אוטובוסים קרובים בתחנה", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ui_c20379), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         FilterChip(
                             selected = filterMode == "עכשיו",
                             onClick = { filterMode = "עכשיו" },
-                            label = { Text("עכשיו") },
+                            label = { Text(stringResource(R.string.ui_62c60a)) },
                             shape = RoundedCornerShape(20.dp)
                         )
                         FilterChip(
@@ -952,7 +954,7 @@ fun StopSearchScreen(
                     }
 
                     if (departures.isEmpty()) {
-                        Text("לא נמצאו יציאות במועד שנבחר.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.ui_83e943), style = MaterialTheme.typography.bodySmall)
                     } else {
                         val nowTime = LocalDateTime.now()
                         departures.forEach { dep ->
@@ -985,10 +987,10 @@ fun StopSearchScreen(
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("קווים העוברים בתחנה זו", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ui_9a66c2), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
                     if (lines.isEmpty()) {
-                        Text("לא נמצאו קווים.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.ui_5be669), style = MaterialTheme.typography.bodySmall)
                     } else {
                         val normStopCity = OperatorTheme.normalizeHebrew(stopCity)
                         val cityHighlightColor = MaterialTheme.colorScheme.primary
@@ -1144,7 +1146,7 @@ fun StopSearchScreen(
                             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("מסך מלא", fontSize = 11.sp)
+                            Text(stringResource(R.string.ui_401142), fontSize = 11.sp)
                         }
                     }
                 }
@@ -1391,7 +1393,7 @@ fun LineSearchScreen(
         AlertDialog(
             onDismissRequest = { showDifferencesDialog = false },
             title = {
-                Text("הבדלים בין המסלולים", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.ui_7d8b87), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             },
             text = {
                 Column(
@@ -1402,7 +1404,7 @@ fun LineSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     if (ctx.alternatives.size > 1) {
-                        Text("חלופות קו:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(stringResource(R.string.ui_fafbb6), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         ctx.alternatives.forEach { alt ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(alt.label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.secondary)
@@ -1414,7 +1416,7 @@ fun LineSearchScreen(
                         if (ctx.alternatives.size > 1) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                         }
-                        Text("שינויים במסלול לפי שעה:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(stringResource(R.string.ui_68de62), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         ctx.subVariants.forEach { sub ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(sub.label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
@@ -1434,7 +1436,7 @@ fun LineSearchScreen(
         AlertDialog(
             onDismissRequest = { showDayPickerDialog = false },
             title = {
-                Text("בחירת יום בשבוע", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.ui_18ed27), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1470,14 +1472,14 @@ fun LineSearchScreen(
     historyItemToDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { historyItemToDelete = null },
-            title = { Text("מחיקת פריט מההיסטוריה") },
+            title = { Text(stringResource(R.string.ui_4df88a)) },
             text = { Text("האם למחוק את קו \"$item\" מהחיפושים האחרונים?") },
             confirmButton = {
                 TextButton(onClick = {
                     SearchHistoryHelper.removeHistory(context, "line_history", item)
                     searchHistory = SearchHistoryHelper.getHistory(context, "line_history")
                     historyItemToDelete = null
-                }) { Text("מחק") }
+                }) { Text(stringResource(R.string.ui_07aecd)) }
             },
             dismissButton = {
                 TextButton(onClick = { historyItemToDelete = null }) { Text("ביטול") }
@@ -1496,7 +1498,7 @@ fun LineSearchScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("מספר תחנה (מק\"ט): ${stop.stopCode}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("בחר פעולה עבור תחנה זו:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(stringResource(R.string.ui_078639), fontWeight = FontWeight.Bold, fontSize = 13.sp)
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         onPlanRouteFrom?.let {
@@ -1515,7 +1517,7 @@ fun LineSearchScreen(
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     ) {
-                        Text("🚏 מעבר לפרטי תחנה זו", fontSize = 13.sp)
+                        Text(stringResource(R.string.ui_b2d2ea), fontSize = 13.sp)
                     }
                 }
             },
@@ -1620,7 +1622,7 @@ fun LineSearchScreen(
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("יציאה ממסך מלא")
+                Text(stringResource(R.string.ui_28ae89))
             }
         }
         return
@@ -1643,7 +1645,7 @@ fun LineSearchScreen(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                label = { Text("מספר קו") },
+                label = { Text(stringResource(R.string.ui_6bba92)) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1663,7 +1665,7 @@ fun LineSearchScreen(
                     value = cityFilter,
                     onValueChange = { cityFilter = it },
                     modifier = Modifier.weight(1f).height(56.dp),
-                    placeholder = { Text("עיר", fontSize = 13.sp, maxLines = 1) },
+                    placeholder = { Text(stringResource(R.string.ui_42aa26), fontSize = 13.sp, maxLines = 1) },
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
                     trailingIcon = {
@@ -1704,7 +1706,7 @@ fun LineSearchScreen(
                         onDismissRequest = { showAgencyDropdown = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("כל המפעילים", fontWeight = FontWeight.Bold) },
+                            text = { Text(stringResource(R.string.ui_f7a127), fontWeight = FontWeight.Bold) },
                             onClick = {
                                 agencyFilter = ""
                                 showAgencyDropdown = false
@@ -1724,7 +1726,7 @@ fun LineSearchScreen(
             }
 
             if (query.isBlank() && searchHistory.isNotEmpty()) {
-                Text("חיפושים אחרונים:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                Text(stringResource(R.string.ui_d7aedf), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     searchHistory.forEach { item ->
                         Surface(
@@ -2004,7 +2006,7 @@ fun LineSearchScreen(
                                     selectedTripRouteId = null
                                 },
                                 label = {
-                                    Text("כל החלופות", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.ui_402b9d), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                                 },
                                 shape = RoundedCornerShape(16.dp),
                                 colors = FilterChipDefaults.filterChipColors(
@@ -2019,7 +2021,7 @@ fun LineSearchScreen(
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                             ) {
-                                Text("הבדלים ⓘ", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                Text(stringResource(R.string.ui_e0fd56), fontSize = 11.sp, maxLines = 1, softWrap = false)
                             }
                         }
                     }
@@ -2034,7 +2036,7 @@ fun LineSearchScreen(
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("רשימת התחנות", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ui_35311b), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
 
                     // בורר משני קומפקטי לתתי-מסלולים בעלי אותם מוצא ויעד (ברירת מחדל: אוטומטי לפי שעה)
                     if (!isAllAlternativesMode && ctx != null && ctx.subVariants.size > 1) {
@@ -2053,7 +2055,7 @@ fun LineSearchScreen(
                                     selectedTripIdForTimeline = null
                                     selectedTripRouteId = null
                                 },
-                                label = { Text("לפי שעה", fontSize = 11.sp) },
+                                label = { Text(stringResource(R.string.ui_4f8abc), fontSize = 11.sp) },
                                 shape = RoundedCornerShape(14.dp)
                             )
 
@@ -2077,7 +2079,7 @@ fun LineSearchScreen(
                                     onClick = { showDifferencesDialog = true },
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                                 ) {
-                                    Text("הבדלים ⓘ", fontSize = 11.sp)
+                                    Text(stringResource(R.string.ui_e0fd56), fontSize = 11.sp)
                                 }
                             }
                         }
@@ -2192,7 +2194,7 @@ fun LineSearchScreen(
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("לוח זמנים יומי", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ui_5de725), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = isTodayMode,
@@ -2200,7 +2202,7 @@ fun LineSearchScreen(
                                 isTodayMode = true
                                 selectedDayOfWeek = scheduleRepo.currentServiceDate().dayOfWeek
                             },
-                            label = { Text("היום", fontSize = 12.sp) },
+                            label = { Text(stringResource(R.string.ui_71958d), fontSize = 12.sp) },
                             shape = RoundedCornerShape(20.dp)
                         )
                         FilterChip(
@@ -2312,7 +2314,7 @@ fun LineSearchScreen(
                             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("מסך מלא", fontSize = 11.sp)
+                            Text(stringResource(R.string.ui_401142), fontSize = 11.sp)
                         }
                     }
                 }

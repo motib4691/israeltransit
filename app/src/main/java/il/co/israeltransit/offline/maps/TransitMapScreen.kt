@@ -1,5 +1,8 @@
 package il.co.israeltransit.offline.maps
 
+import androidx.compose.ui.res.stringResource
+import il.co.israeltransit.offline.R
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -685,7 +688,7 @@ fun TransitMapScreen(
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.align(Alignment.Start)
                 ) {
-                    Text("חזרה")
+                    Text(stringResource(R.string.ui_b95e2a))
                 }
             }
 
@@ -730,7 +733,7 @@ fun TransitMapScreen(
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp)
                                 ) {
-                                    Text("פתח תכנון", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.ui_a13723), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                             IconButton(
@@ -783,7 +786,7 @@ fun TransitMapScreen(
                             onValueChange = { searchQuery = it },
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = {
-                                Text("הקלד רחוב, כתובת, עיר או מספר תחנה...")
+                                Text(stringResource(R.string.ui_3c7cce))
                             },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
@@ -1105,7 +1108,7 @@ fun TransitMapScreen(
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("סגירה")
+                            Text(stringResource(R.string.ui_39d88b))
                         }
                     }
 
@@ -1227,7 +1230,7 @@ fun TransitMapScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(20.dp)
                                 ) {
-                                    Text("🚏 פתח פרטי תחנה")
+                                    Text(stringResource(R.string.ui_a45d31))
                                 }
                             }
 
@@ -1305,7 +1308,7 @@ fun TransitMapScreen(
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("סגירה")
+                                Text(stringResource(R.string.ui_39d88b))
                             }
                         }
 

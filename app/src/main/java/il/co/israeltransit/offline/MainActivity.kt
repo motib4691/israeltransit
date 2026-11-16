@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -148,7 +150,7 @@ fun TransitApp() {
                     },
                     shape = RoundedCornerShape(20.dp)
                 ) {
-                    Text("עדכון נתונים")
+                    Text(stringResource(R.string.ui_089fec))
                 }
             },
             dismissButton = {
@@ -159,12 +161,12 @@ fun TransitApp() {
                             clockAlert = null
                         }
                     ) {
-                        Text("אל תראה שוב")
+                        Text(stringResource(R.string.ui_d54503))
                     }
                     TextButton(
                         onClick = { clockAlert = null }
                     ) {
-                        Text("סגור")
+                        Text(stringResource(R.string.ui_602b2e))
                     }
                 }
             }

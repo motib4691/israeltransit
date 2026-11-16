@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -142,7 +144,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLicensesDialog = false }) {
-                    Text("סגירה")
+                    Text(stringResource(R.string.ui_39d88b))
                 }
             }
         )
@@ -171,7 +173,7 @@ fun SettingsScreen(
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה")
+                Text(stringResource(R.string.ui_b95e2a))
             }
         }
 
@@ -280,10 +282,10 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("ישיר", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_11c0f3), style = MaterialTheme.typography.bodySmall)
                     Text("1", style = MaterialTheme.typography.bodySmall)
                     Text("2", style = MaterialTheme.typography.bodySmall)
-                    Text("3 (ברירת מחדל)", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_91a886), style = MaterialTheme.typography.bodySmall)
                     Text("4", style = MaterialTheme.typography.bodySmall)
                     Text("5", style = MaterialTheme.typography.bodySmall)
                 }
@@ -323,9 +325,9 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("1 דק'", style = MaterialTheme.typography.bodySmall)
-                    Text("2 (ברירת מחדל)", style = MaterialTheme.typography.bodySmall)
-                    Text("15 דק'", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_1d6e83), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_3f0e55), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_ec48db), style = MaterialTheme.typography.bodySmall)
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -480,7 +482,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("העתק קישור להורדה", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_ec3aca), fontSize = 12.sp)
                         }
                     }
                 }
@@ -515,7 +517,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("העתק קישור להורדה", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_ec3aca), fontSize = 12.sp)
                         }
                     }
                 }
@@ -658,7 +660,7 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("📜 רישיונות קוד פתוח ומקורות מידע", fontSize = 12.sp)
+                    Text(stringResource(R.string.ui_e8d640), fontSize = 12.sp)
                 }
             }
         }
@@ -668,7 +670,7 @@ fun SettingsScreen(
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("חזרה למסך הבית")
+            Text(stringResource(R.string.ui_55a91f))
         }
     }
 }
