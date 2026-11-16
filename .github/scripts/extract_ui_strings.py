@@ -12,7 +12,13 @@ INTERPOLATION_PATTERN = re.compile(
     r'\$(?:\{([A-Za-z0-9_.\(\)]+)\}|([A-Za-z_][A-Za-z0-9_]*))'
 )
 
-# כל בלוק פנימי או קריאה שאינם ציור ממשק UI ישיר
+# החרגה ממוקדת לשורות ספציפיות שנמצאות בהקשר שאינו @Composable (עם טווח ביטחון)
+EXCLUDED_FILE_LINES = {
+    "TransitSearchScreens.kt": set(range(477, 482)) | set(range(926, 931)),
+    "UpdateDataScreen.kt": set(range(39, 44)),
+    "OfflineMapView.kt": set(range(121, 130)),
+}
+
 NON_COMPOSABLE_CONSTRUCTS = (
     "onClick", "onValueChange", "onCheckedChange", "onDismissRequest",
     "onLongClick", "onDoubleClick", "onClickLabel", "onAction",
@@ -27,6 +33,12 @@ NON_COMPOSABLE_CONSTRUCTS = (
     "Comparator", "sortedBy", "sortedWith", "filter", "map", "mapNotNull",
     "forEach", "forEachIndexed", "firstOrNull", "find", "any", "all", "none",
     "buildString", "apply", "also", "let", "run", "with"
+)
+
+# קריאות מרובות-שורות עם סוגריים עגולים ( ) שאינן @Composable
+NON_COMPOSABLE_PAREN_CALLS = (
+    "Toast.makeText", "showSnackbar", "NotificationCompat", "AlertDialog",
+    "setTitle", "setMessage", "putExtra", "Intent(", "Uri.parse"
 )
 
 FORBIDDEN_LINE_KEYWORDS = ("Toast", "Snackbar", "Log.", "const val", "throw ", "Exception(", "return@")
@@ -129,6 +141,7 @@ def main():
             if "@Composable" not in original_code:
                 continue
 
+            excluded_lines = EXCLUDED_FILE_LINES.get(file, set())
             file_changed = False
             new_lines = []
 
@@ -142,7 +155,10 @@ def main():
             non_composable_depth = 0
             in_non_composable = False
 
-            for line in original_code.splitlines():
+            in_non_composable_parens = False
+            paren_depth = 0
+
+            for line_num, line in enumerate(original_code.splitlines(), start=1):
                 stripped = line.strip()
 
                 if "/*" in stripped and "*/" not in stripped:
@@ -162,6 +178,20 @@ def main():
                 clean_for_braces = strip_comments_and_strings_for_braces(line)
                 opens = clean_for_braces.count("{")
                 closes = clean_for_braces.count("}")
+                p_opens = clean_for_braces.count("(")
+                p_closes = clean_for_braces.count(")")
+
+                # מעקב אחרי קריאות סוגריים עגולים לא-קומפוזביליות מרובות שורות (כגון Toast.makeText)
+                if not in_non_composable_parens:
+                    if any(call in clean_for_braces for call in NON_COMPOSABLE_PAREN_CALLS):
+                        if p_opens > p_closes:
+                            in_non_composable_parens = True
+                            paren_depth = p_opens - p_closes
+                else:
+                    paren_depth += p_opens - p_closes
+                    if paren_depth <= 0:
+                        in_non_composable_parens = False
+                        paren_depth = 0
 
                 is_local_non_composable_fun = (
                     in_composable
@@ -174,7 +204,6 @@ def main():
                     if not in_composable:
                         pending_composable = True
 
-                # זיהוי כניסה לבלוק לא-קומפוזבילי בתוך פונקציית מסך
                 if in_composable and not in_non_composable:
                     has_blocked_construct = (
                         is_local_non_composable_fun
@@ -188,7 +217,6 @@ def main():
                         elif opens == 0:
                             pending_non_composable = True
 
-                    # אם אנחנו בתוך בלוק פנימי (עומק > 1) ומופיע חץ למבדה -> בשורה חדשה, נחסום עד סגירת הבלוק הנוכחי
                     elif composable_depth > 1 and "->" in clean_for_braces and not saw_composable_annotation:
                         in_non_composable = True
                         non_composable_depth = 1 + (opens - closes)
@@ -204,7 +232,6 @@ def main():
                         in_non_composable = False
                         non_composable_depth = 0
 
-                # ניהול עומק פונקציית ה-@Composable הראשית
                 if pending_composable and opens > 0:
                     in_composable = True
                     pending_composable = False
@@ -216,9 +243,11 @@ def main():
                         saw_composable_annotation = False
 
                 can_replace = (
-                    in_composable
+                    line_num not in excluded_lines
+                    and in_composable
                     and not in_non_composable
                     and not pending_non_composable
+                    and not in_non_composable_parens
                     and not any(kw in clean_for_braces for kw in FORBIDDEN_LINE_KEYWORDS)
                 )
 
