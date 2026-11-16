@@ -331,13 +331,13 @@ private data class HomeMenuItemData(
 @Composable
 private fun HomeScreen(onNavigate: (AppScreen) -> Unit) {
     val items = listOf(
-        HomeMenuItemData("תכנון מסלול", "מציאת מסלול נסיעה בין שתי נקודות", AppScreen.RoutePlanner(), "🧭"),
-        HomeMenuItemData("חיפוש קו", "חיפוש קווים לפי מספר, עיר ומפעיל", AppScreen.LineSearch(), "🚌"),
-        HomeMenuItemData("חיפוש תחנה", "איתור תחנות וקווים העוברים בהן", AppScreen.StopSearch(), "🚏"),
-        HomeMenuItemData("מפה לא מקוונת", "מפה אינטראקטיבית, איתור תחנות וערי ישראל", AppScreen.OfflineMap, "🗺️"),
-        HomeMenuItemData("התחנות שלי", "התחנות ששמרת לשימוש מהיר", AppScreen.SavedStops, "⭐"),
-        HomeMenuItemData("עדכון נתונים", "ייבוא ועדכון מאגר התחבורה וקובץ המפה", AppScreen.UpdateData, "🔄"),
-        HomeMenuItemData("הגדרות", "התאמת החלפות, מרווחים, רטט בירידה ומראה", AppScreen.Settings, "⚙️")
+        HomeMenuItemData(stringResource(R.string.ui_b2c126), stringResource(R.string.ui_ebb785), AppScreen.RoutePlanner(), "🧭"),
+        HomeMenuItemData(stringResource(R.string.ui_44a8a7), stringResource(R.string.ui_12c6c3), AppScreen.LineSearch(), "🚌"),
+        HomeMenuItemData(stringResource(R.string.ui_07ae91), stringResource(R.string.ui_dcb4a0), AppScreen.StopSearch(), "🚏"),
+        HomeMenuItemData(stringResource(R.string.ui_1fa750), stringResource(R.string.ui_8a09f4), AppScreen.OfflineMap, "🗺️"),
+        HomeMenuItemData(stringResource(R.string.ui_95c036), stringResource(R.string.ui_83c566), AppScreen.SavedStops, "⭐"),
+        HomeMenuItemData(stringResource(R.string.ui_089fec), stringResource(R.string.ui_831c6b), AppScreen.UpdateData, "🔄"),
+        HomeMenuItemData(stringResource(R.string.ui_089b78), stringResource(R.string.ui_df1144), AppScreen.Settings, "⚙️")
     )
 
     Column(
