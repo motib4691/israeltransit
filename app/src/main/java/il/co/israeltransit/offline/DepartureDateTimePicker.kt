@@ -1,6 +1,8 @@
 
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +37,7 @@ fun DepartureDateTimePicker(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("מועד יציאה")
+        Text(stringResource(R.string.ui_7bf5fc))
 
         Text(
             "${value.format(departureDateFormatter)} בשעה " +
@@ -64,7 +66,7 @@ fun DepartureDateTimePicker(
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Text("בחירת תאריך")
+                Text(stringResource(R.string.ui_221d72))
             }
 
             OutlinedButton(
@@ -86,7 +88,7 @@ fun DepartureDateTimePicker(
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Text("בחירת שעה")
+                Text(stringResource(R.string.ui_69c99e))
             }
         }
 
@@ -96,7 +98,7 @@ fun DepartureDateTimePicker(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("יציאה עכשיו")
+            Text(stringResource(R.string.ui_a61164))
         }
     }
 }

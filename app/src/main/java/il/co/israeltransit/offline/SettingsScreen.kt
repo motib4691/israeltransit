@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +43,7 @@ private val APP_CREDITS_AND_LICENSES = listOf(
         description = "נתוני המפה, גבולות הים והמים, הפארקים, השבילים, שמות הרחובות, הכתובות ורשת ההליכה בישראל מבוססים על נתוני OpenStreetMap."
     ),
     CreditEntry(
-        title = "משרד התחבורה בישראל (GTFS)",
+        title = stringResource(R.string.ui_8fcae2),
         license = "מאגר מידע ממשלתי פתוח",
         description = "רשימת התחנות, הקווים, המסלולים ולוחות הזמנים מבוססים על קובצי ה-GTFS הפתוחים של משרד התחבורה."
     ),
@@ -66,7 +68,7 @@ private val APP_CREDITS_AND_LICENSES = listOf(
         description = "גופני הטקסט להצגת שמות ערים, רחובות ותחנות בעברית ובאנגלית על גבי המפה."
     ),
     CreditEntry(
-        title = "AndroidX, Jetpack Compose, Kotlin & תלויות תשתית",
+        title = stringResource(R.string.ui_c29cd5),
         license = "רישיון: Apache License 2.0 / MIT / BSD",
         description = "כולל Jetpack Compose, Material 3, AndroidX, Kotlin, Kotlinx Coroutines, JTS Topology Suite, Gson, HPPC, Jackson ו-SLF4J."
     )
@@ -99,7 +101,7 @@ fun SettingsScreen(
             onDismissRequest = { showLicensesDialog = false },
             title = {
                 Text(
-                    text = "קרדיטים, מקורות מידע ורישיונות",
+                    text = stringResource(R.string.ui_e655fe),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -142,7 +144,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLicensesDialog = false }) {
-                    Text("סגירה")
+                    Text(stringResource(R.string.ui_39d88b))
                 }
             }
         )
@@ -161,7 +163,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "הגדרות",
+                text = stringResource(R.string.ui_089b78),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -171,12 +173,12 @@ fun SettingsScreen(
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה")
+                Text(stringResource(R.string.ui_b95e2a))
             }
         }
 
         Text(
-            text = "התאמת אופן תכנון המסלול, הנחיות לקובצי הנתונים ונראות האפליקציה.",
+            text = stringResource(R.string.ui_9bf280),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -195,7 +197,7 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "תכנון נסיעה",
+                    text = stringResource(R.string.ui_8600ec),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -203,7 +205,7 @@ fun SettingsScreen(
 
                 // בורר אמצעי תחבורה מותאם אוטומטית לרוחב המסך
                 Text(
-                    text = "העדפת אמצעי תחבורה:",
+                    text = stringResource(R.string.ui_5df3e9),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
@@ -214,9 +216,9 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
-                        TransitModePreference.ALL to "כל האמצעים",
-                        TransitModePreference.PREFER_TRAIN to "העדפת רכבת",
-                        TransitModePreference.BUS_ONLY to "אוטובוסים בלבד"
+                        TransitModePreference.ALL to stringResource(R.string.ui_7e237c),
+                        TransitModePreference.PREFER_TRAIN to stringResource(R.string.ui_6582fc),
+                        TransitModePreference.BUS_ONLY to stringResource(R.string.ui_542ab3)
                     ).forEach { (mode, label) ->
                         FilterChip(
                             selected = transitMode == mode,
@@ -239,7 +241,7 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    text = "בעת בחירת 'העדפת רכבת', יוצגו חלופות אוטובוס מצוינות במידה ואין רכבת מתאימה.",
+                    text = stringResource(R.string.ui_810c0c),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -248,12 +250,12 @@ fun SettingsScreen(
 
                 // כמות החלפות
                 Text(
-                    text = "כמות החלפות מרבית מבוקשת:",
+                    text = stringResource(R.string.ui_4b719f),
                     fontWeight = FontWeight.Medium
                 )
 
                 Text(
-                    text = if (maxTransfers == 0) "נסיעה ישירה בלבד (ללא החלפות)"
+                    text = if (maxTransfers == 0) stringResource(R.string.ui_0b906f)
                            else "$maxTransfers החלפות לכל היותר",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.secondary,
@@ -280,10 +282,10 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("ישיר", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_11c0f3), style = MaterialTheme.typography.bodySmall)
                     Text("1", style = MaterialTheme.typography.bodySmall)
                     Text("2", style = MaterialTheme.typography.bodySmall)
-                    Text("3 (ברירת מחדל)", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_91a886), style = MaterialTheme.typography.bodySmall)
                     Text("4", style = MaterialTheme.typography.bodySmall)
                     Text("5", style = MaterialTheme.typography.bodySmall)
                 }
@@ -292,7 +294,7 @@ fun SettingsScreen(
 
                 // מרווח ביטחון
                 Text(
-                    text = "מרווח ביטחון מינימלי להחלפת קו:",
+                    text = stringResource(R.string.ui_e2a82e),
                     fontWeight = FontWeight.Medium
                 )
 
@@ -323,9 +325,9 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("1 דק'", style = MaterialTheme.typography.bodySmall)
-                    Text("2 (ברירת מחדל)", style = MaterialTheme.typography.bodySmall)
-                    Text("15 דק'", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_1d6e83), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_3f0e55), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_ec48db), style = MaterialTheme.typography.bodySmall)
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -338,15 +340,15 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "אפשר הליכה בין תחנות בהחלפה",
+                            text = stringResource(R.string.ui_425171),
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
                             text = if (allowWalkingTransfers)
-                                "מאפשר מעבר רגלי קצר (עד 350 מטר) בין תחנות סמוכות"
+                                stringResource(R.string.ui_867737)
                             else
-                                "יוצגו רק מסלולים ישירים או החלפות באותה תחנה בלבד",
+                                stringResource(R.string.ui_f96aca),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -375,12 +377,12 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "התראת רטט לפני תחנת ירידה",
+                            text = stringResource(R.string.ui_f8e200),
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
-                            text = "מרטיט את המכשיר בקרבת תחנת היעד (פעיל רק במכשירים הכוללים רכיב מיקום GPS פעיל)",
+                            text = stringResource(R.string.ui_7c3a2d),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -412,14 +414,14 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "הורדת קובצי נתונים ומפה",
+                    text = stringResource(R.string.ui_8f6762),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
 
                 Text(
-                    text = "הנחיות לעדכון המאגרים:",
+                    text = stringResource(R.string.ui_893caa),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
@@ -434,18 +436,18 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "• חבילת המפה והניווט (israel-map-pack.zip): יציבה מאוד ומכילה את מפת הדרכים בישראל, אינדקס הכתובות ורשת ההליכה. אין צורך לעדכן אותה אלא אחת לתקופה ממושכת.",
+                            text = stringResource(R.string.ui_dd18d3),
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
-                            text = "• מאגר התחבורה (GTFS): מתעדכן בתחילת כל חודש עם לוחות זמנים ומסלולים חדשים. מומלץ לעדכן אותו אחת לחודש.",
+                            text = stringResource(R.string.ui_5b9ba8),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
 
                 Text(
-                    text = "קישורים ישירים להורדה:",
+                    text = stringResource(R.string.ui_429116),
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
@@ -463,7 +465,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "מאגר נתוני תחבורה (israel-transit.sqlite.gz)",
+                            text = stringResource(R.string.ui_ce9d3b),
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -475,12 +477,12 @@ fun SettingsScreen(
                         FilledTonalButton(
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(TRANSIT_DATA_URL))
-                                Toast.makeText(context, "קישור נתוני התחבורה הועתק ללוח", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, stringResource(R.string.ui_6d3485), Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("העתק קישור להורדה", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_ec3aca), fontSize = 12.sp)
                         }
                     }
                 }
@@ -498,7 +500,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "חבילת מפה וניווט לא מקוונת (israel-map-pack.zip)",
+                            text = stringResource(R.string.ui_4a3cf2),
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -510,12 +512,12 @@ fun SettingsScreen(
                         FilledTonalButton(
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(OFFLINE_MAP_URL))
-                                Toast.makeText(context, "קישור חבילת המפה הועתק ללוח", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, stringResource(R.string.ui_cbac78), Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("העתק קישור להורדה", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_ec3aca), fontSize = 12.sp)
                         }
                     }
                 }
@@ -536,14 +538,14 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "עיצוב ומראה",
+                    text = stringResource(R.string.ui_d9af15),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
 
                 Text(
-                    text = "מצב תצוגה:",
+                    text = stringResource(R.string.ui_6add95),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
@@ -554,9 +556,9 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
-                        AppThemeMode.SYSTEM to "מערכת",
-                        AppThemeMode.LIGHT to "בהיר",
-                        AppThemeMode.DARK to "כהה"
+                        AppThemeMode.SYSTEM to stringResource(R.string.ui_01db4c),
+                        AppThemeMode.LIGHT to stringResource(R.string.ui_6f05e2),
+                        AppThemeMode.DARK to stringResource(R.string.ui_923ee5)
                     ).forEach { (mode, label) ->
                         FilterChip(
                             selected = themeMode == mode,
@@ -581,7 +583,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
-                    text = "צבע נושא ראשי:",
+                    text = stringResource(R.string.ui_999ae2),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
@@ -639,17 +641,17 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "אודות האפליקציה",
+                    text = stringResource(R.string.ui_e180b7),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "IsraelOfflineTransit — גרסה 1.1.0",
+                    text = stringResource(R.string.ui_9f38e4),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
                 Text(
-                    text = "האפליקציה פועלת באופן לא-מקוון ומאפשרת שימוש מלא בתחבורה הציבורית בישראל ללא תלות ברשת או ב-GPS.",
+                    text = stringResource(R.string.ui_45eaf1),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -658,7 +660,7 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("📜 רישיונות קוד פתוח ומקורות מידע", fontSize = 12.sp)
+                    Text(stringResource(R.string.ui_e8d640), fontSize = 12.sp)
                 }
             }
         }
@@ -668,7 +670,7 @@ fun SettingsScreen(
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("חזרה למסך הבית")
+            Text(stringResource(R.string.ui_55a91f))
         }
     }
 }

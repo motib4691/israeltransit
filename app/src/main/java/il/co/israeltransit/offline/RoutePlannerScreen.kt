@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -448,7 +450,7 @@ fun RoutePlannerScreen(
     fareInfoToShow?.let { fare ->
         AlertDialog(
             onDismissRequest = { fareInfoToShow = null },
-            title = { Text("תעריף נסיעה משוער ('דרך שווה')") },
+            title = { Text(stringResource(R.string.ui_0e0b84)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -462,7 +464,7 @@ fun RoutePlannerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { fareInfoToShow = null }) {
-                    Text("סגירה")
+                    Text(stringResource(R.string.ui_39d88b))
                 }
             }
         )
@@ -738,7 +740,7 @@ fun RoutePlannerScreen(
                         .padding(16.dp),
                     shape = RoundedCornerShape(20.dp)
                 ) {
-                    Text("יציאה ממסך מלא")
+                    Text(stringResource(R.string.ui_28ae89))
                 }
             }
             return
@@ -765,7 +767,7 @@ fun RoutePlannerScreen(
                     onClick = { detailedJourney = null },
                     shape = RoundedCornerShape(20.dp)
                 ) {
-                    Text("חזרה לתוצאות")
+                    Text(stringResource(R.string.ui_fff64f))
                 }
             }
 
@@ -810,11 +812,11 @@ fun RoutePlannerScreen(
                             }
                         }
                         clipboardManager.setText(AnnotatedString(summary))
-                        Toast.makeText(context, "סיכום הנסיעה הועתק ללוח!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, stringResource(R.string.ui_61c7ae), Toast.LENGTH_SHORT).show()
                     },
                     shape = RoundedCornerShape(20.dp)
                 ) {
-                    Text("📋 העתק סיכום נסיעה", fontSize = 12.sp)
+                    Text(stringResource(R.string.ui_1f9277), fontSize = 12.sp)
                 }
 
                 FilledTonalButton(
@@ -949,7 +951,7 @@ fun RoutePlannerScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 if (intermediateStops.isEmpty()) {
-                                    Text("טוען תחנות...", style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(R.string.ui_fbf5b8), style = MaterialTheme.typography.bodySmall)
                                 } else {
                                     intermediateStops.forEachIndexed { sIdx, s ->
                                         Text("${sIdx + 1}. ${s.name} (תחנה ${s.stopCode})", style = MaterialTheme.typography.bodySmall)
@@ -1011,7 +1013,7 @@ fun RoutePlannerScreen(
                                             }
                                         } else {
                                             Text("1. צא מ-${leg.toStopName} והתקדם ברגל ברחוב", style = MaterialTheme.typography.bodySmall)
-                                            Text("2. עבור את מעבר החצייה במידת הצורך", style = MaterialTheme.typography.bodySmall)
+                                            Text(stringResource(R.string.ui_b42667), style = MaterialTheme.typography.bodySmall)
                                             Text("3. הגע לרציף תחנת ${nextLeg.fromStopName}", style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
@@ -1043,7 +1045,7 @@ fun RoutePlannerScreen(
                                 .clickable { showFinalWalkDetails = !showFinalWalkDetails },
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("🚶 הליכה מסכמת אל היעד", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_0511ad), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             if (ghFinal != null && ghFinal.instructions.isNotEmpty()) {
                                 Text(if (showFinalWalkDetails) "▲" else "▼", fontSize = 11.sp)
                             }
@@ -1093,7 +1095,7 @@ fun RoutePlannerScreen(
                                 .padding(8.dp),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("מסך מלא", fontSize = 11.sp)
+                            Text(stringResource(R.string.ui_401142), fontSize = 11.sp)
                         }
                     }
                 }
@@ -1105,12 +1107,12 @@ fun RoutePlannerScreen(
     if (showMapNotInstalledDialog) {
         AlertDialog(
             onDismissRequest = { showMapNotInstalledDialog = false },
-            title = { Text("מפה לא מותקנת") },
+            title = { Text(stringResource(R.string.ui_884984)) },
             text = {
                 Text("חבילת המפה לא הותקנה עדיין במכשיר.\nתכנון הנסיעה בין תחנות וזמני היציאה פועלים גם ללא מפה.")
             },
             confirmButton = {
-                TextButton(onClick = { showMapNotInstalledDialog = false }) { Text("הבנתי") }
+                TextButton(onClick = { showMapNotInstalledDialog = false }) { Text(stringResource(R.string.ui_408eac)) }
             }
         )
     }
@@ -1139,7 +1141,7 @@ fun RoutePlannerScreen(
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה למסך הבית")
+                Text(stringResource(R.string.ui_55a91f))
             }
         }
 
@@ -1161,7 +1163,7 @@ fun RoutePlannerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("מוצא", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(stringResource(R.string.ui_0b8eef), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     FilledTonalButton(
                         onClick = {
                             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -1173,7 +1175,7 @@ fun RoutePlannerScreen(
                         shape = RoundedCornerShape(20.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                     ) {
-                        Text(if (detectingLocation) "מאתר..." else "📍 המיקום שלי", fontSize = 11.sp)
+                        Text(if (detectingLocation) stringResource(R.string.ui_8fe323) else stringResource(R.string.ui_1050fd), fontSize = 11.sp)
                     }
                 }
 
@@ -1195,7 +1197,7 @@ fun RoutePlannerScreen(
                             .weight(1f)
                             .focusRequester(originFocusRequester)
                             .onFocusChanged { if (it.isFocused) activeField = "origin" },
-                        label = { Text("הקלד מוצא (שם רחוב/כתובת או תחנה)", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.ui_290c39), fontSize = 12.sp) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
@@ -1284,7 +1286,7 @@ fun RoutePlannerScreen(
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 if (group.stop2 != null) {
-                                    Text("תחנה דו-כיוונית (מק\"ט ${group.stop1.stopCode} / ${group.stop2.stopCode})", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text(stringResource(R.string.ui_e38479)ט ${group.stop1.stopCode} / ${group.stop2.stopCode})", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                 } else {
                                     Text("תחנה ${group.stop1.stopCode}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                                 }
@@ -1335,13 +1337,13 @@ fun RoutePlannerScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("⇅", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("החלפת מוצא ויעד", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.ui_8844ea), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
                 // כותרת יעד
-                Text("יעד", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(stringResource(R.string.ui_83ab34), fontWeight = FontWeight.Bold, fontSize = 14.sp)
 
                 // שדה יעד
                 Row(
@@ -1366,7 +1368,7 @@ fun RoutePlannerScreen(
                                     scope.launch { scrollState.animateScrollTo(260) }
                                 }
                             },
-                        label = { Text("הקלד יעד (שם רחוב/כתובת או תחנה)", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.ui_17e0c1), fontSize = 12.sp) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
@@ -1466,7 +1468,7 @@ fun RoutePlannerScreen(
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 if (group.stop2 != null) {
-                                    Text("תחנה דו-כיוונית (מק\"ט ${group.stop1.stopCode} / ${group.stop2.stopCode})", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text(stringResource(R.string.ui_e38479)ט ${group.stop1.stopCode} / ${group.stop2.stopCode})", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                 } else {
                                     Text("תחנה ${group.stop1.stopCode}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                                 }
@@ -1479,7 +1481,7 @@ fun RoutePlannerScreen(
 
         // תחנות שמורות אישיות
         if (savedStops.isNotEmpty()) {
-            Text("התחנות שלי לבחירה מהירה:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(stringResource(R.string.ui_cd78bd), fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 savedStops.take(4).forEach { saved ->
                     Surface(
@@ -1538,7 +1540,7 @@ fun RoutePlannerScreen(
             enabled = selectedOrigin != null && selectedDestination != null && selectedOrigin?.stopId != selectedDestination?.stopId && !calculating,
             shape = RoundedCornerShape(20.dp)
         ) {
-            Text(if (calculating) "מחשב מסלול..." else "חפש מסלול")
+            Text(if (calculating) stringResource(R.string.ui_d42b07) else stringResource(R.string.ui_877296))
         }
 
         if (calculating) {
@@ -1555,10 +1557,10 @@ fun RoutePlannerScreen(
                 }
             } else if (res.journeys.isEmpty()) {
                 Card {
-                    Text("לא נמצאו מסלולים מתאימים במועד המבוקש.", modifier = Modifier.padding(14.dp))
+                    Text(stringResource(R.string.ui_30d89c), modifier = Modifier.padding(14.dp))
                 }
             } else {
-                Text("תוצאות חיפוש", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.ui_d78d89), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
 
                 res.journeys.forEachIndexed { idx, journey ->
                     val isExpanded = expandedJourneyIndex == idx
@@ -1677,7 +1679,7 @@ fun RoutePlannerScreen(
                                             .fillMaxWidth()
                                             .padding(top = 4.dp)
                                     ) {
-                                        Text("צפה בפירוט המסלול המלא והוראות הליכה")
+                                        Text(stringResource(R.string.ui_83dce9))
                                     }
                                 }
                             }

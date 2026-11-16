@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -36,7 +38,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var busy by remember { mutableStateOf(false) }
-    var statusMessage by remember { mutableStateOf("בחר קובץ נתונים או חבילת מפה להתקנה.") }
+    var statusMessage by remember { mutableStateOf(stringResource(R.string.ui_141581)) }
     var refreshVersion by remember { mutableIntStateOf(0) }
 
     val locations = remember(refreshVersion) { storage.availableLocations() }
@@ -54,7 +56,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
         if (uri != null && !busy) {
             scope.launch {
                 busy = true
-                statusMessage = "מתבצע ייבוא מהיר של מאגר התחבורה..."
+                statusMessage = stringResource(R.string.ui_5e29e6)
                 val result = withContext(Dispatchers.IO) { database.importDatabase(uri) }
                 busy = false
                 statusMessage = result.message
@@ -67,7 +69,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
         if (uri != null && !busy) {
             scope.launch {
                 busy = true
-                statusMessage = "מתבצעים פריסה, ייבוא ואימות של חבילת המפה הלא-מקוונת..."
+                statusMessage = stringResource(R.string.ui_66d13d)
                 val result = withContext(Dispatchers.IO) { mapStorage.importArchive(uri) }
                 busy = false
                 statusMessage = result.message
@@ -89,7 +91,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "ייבוא ועדכון נתונים",
+                text = stringResource(R.string.ui_78ffc2),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -98,12 +100,12 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה למסך הבית")
+                Text(stringResource(R.string.ui_55a91f))
             }
         }
 
         Text(
-            text = "מרכז ניהול קובצי הנתונים והמפה של האפליקציה לפעילות מלאה ללא אינטרנט.",
+            text = stringResource(R.string.ui_52fab6),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -117,12 +119,12 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("מאגר נתוני תחבורה (GTFS)", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_5d9aa0), fontWeight = FontWeight.Bold)
                 if (databaseAvailable) {
-                    Text("מותקן במכשיר", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.ui_f2a626), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("עדכון אחרון: ${dateFormatter.format(Date(lastUpdate))}", style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Text("עדיין לא הותקן מאגר נתונים", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_a22858), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 FilledTonalButton(
                     onClick = { transitFilePicker.launch(arrayOf("*/*")) },
@@ -130,7 +132,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("ייבוא קובץ נתוני תחבורה (israel-transit.sqlite.gz)")
+                    Text(stringResource(R.string.ui_ef9a63))
                 }
             }
         }
@@ -144,24 +146,24 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("חבילת מפה וניווט לא מקוונת", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_25d00a), fontWeight = FontWeight.Bold)
                 if (mapAvailable) {
-                    Text("קובץ מפה מותקן ותקין", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.ui_581f3d), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     if (addressesAvailable && walkingGraphAvailable) {
                         Text(
-                            text = "כולל חיפוש רחובות וכתובות ורשת ניווט להולכי רגל",
+                            text = stringResource(R.string.ui_ee2191),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            text = "הותקנה מפה בסיסית. ייבא את israel-map-pack.zip לתמיכה מלאה בחיפוש רחובות והליכה.",
+                            text = stringResource(R.string.ui_7fa78f),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
                 } else {
-                    Text("עדיין לא הותקנה חבילת מפה (אופציונלי)", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_e91a4e), style = MaterialTheme.typography.bodySmall)
                 }
                 FilledTonalButton(
                     onClick = { mapFilePicker.launch(arrayOf("*/*")) },
@@ -169,7 +171,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("ייבוא חבילת מפה (israel-map-pack.zip)")
+                    Text(stringResource(R.string.ui_a8b1b4))
                 }
             }
         }
@@ -183,7 +185,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("מיקום אחסון הקבצים", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_7b8b71), fontWeight = FontWeight.Bold)
                 locations.forEach { loc ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -203,7 +205,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                                             statusMessage = if (success) {
                                                 "מיקום האחסון הוגדר ל: ${loc.label}. הקבצים שייובאו יישמרו כאן."
                                             } else {
-                                                "לא ניתן היה להגדיר את מיקום האחסון שנבחר."
+                                                stringResource(R.string.ui_7012a9)
                                             }
                                         }
                                         busy = false
@@ -242,7 +244,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (busy) "⏳ מתבצע ייבוא / עדכון..." else "מצב המערכת:",
+                        text = if (busy) stringResource(R.string.ui_3b48c7) else stringResource(R.string.ui_1976b5),
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = if (busy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface

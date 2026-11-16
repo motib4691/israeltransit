@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline.maps
 
+import androidx.compose.ui.res.stringResource
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -388,7 +390,7 @@ fun TransitMapScreen(
     fun moveToLocation() {
         val map = activeMap
         if (map == null) {
-            Toast.makeText(context, "המפה עדיין נטענת", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, stringResource(R.string.ui_70791f), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -549,7 +551,7 @@ fun TransitMapScreen(
 
                         updatePickedPinOnMap(lat, lon)
                         pickedLocation = PickedMapLocation(
-                            title = "נקודה שנבחרה במפה",
+                            title = stringResource(R.string.ui_28f4cd),
                             subtitle = coordsLabel,
                             latitude = lat,
                             longitude = lon
@@ -685,7 +687,7 @@ fun TransitMapScreen(
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.align(Alignment.Start)
                 ) {
-                    Text("חזרה")
+                    Text(stringResource(R.string.ui_b95e2a))
                 }
             }
 
@@ -714,7 +716,7 @@ fun TransitMapScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "כעת לחץ לחיצה ארוכה על יעד במפה או בחר תחנה",
+                                text = stringResource(R.string.ui_07e02e),
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -730,7 +732,7 @@ fun TransitMapScreen(
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp)
                                 ) {
-                                    Text("פתח תכנון", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.ui_a13723), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                             IconButton(
@@ -783,7 +785,7 @@ fun TransitMapScreen(
                             onValueChange = { searchQuery = it },
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = {
-                                Text("הקלד רחוב, כתובת, עיר או מספר תחנה...")
+                                Text(stringResource(R.string.ui_3c7cce))
                             },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
@@ -835,7 +837,7 @@ fun TransitMapScreen(
                                             fontWeight = FontWeight.Medium
                                         )
                                         Text(
-                                            text = "עבור ←",
+                                            text = stringResource(R.string.ui_f25f78),
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -847,7 +849,7 @@ fun TransitMapScreen(
                             }
                         } else if (addressResults.isEmpty() && stopResults.isEmpty()) {
                             Text(
-                                text = "לא נמצאו רחובות, ערים או תחנות מתאימות.",
+                                text = stringResource(R.string.ui_e468e6),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(8.dp)
@@ -861,7 +863,7 @@ fun TransitMapScreen(
                                 if (addressResults.isNotEmpty()) {
                                     item {
                                         Text(
-                                            text = "רחובות, כתובות ויישובים",
+                                            text = stringResource(R.string.ui_614f6c),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.primary,
                                             fontWeight = FontWeight.Bold,
@@ -931,7 +933,7 @@ fun TransitMapScreen(
                                 if (stopResults.isNotEmpty()) {
                                     item {
                                         Text(
-                                            text = "תחנות תחבורה ציבורית",
+                                            text = stringResource(R.string.ui_7de9e7),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.secondary,
                                             fontWeight = FontWeight.Bold,
@@ -971,7 +973,7 @@ fun TransitMapScreen(
                                                     fontSize = 14.sp
                                                 )
                                                 Text(
-                                                    text = "מספר תחנה (מק\"ט): ${stop.stopCode}",
+                                                    text = stringResource(R.string.ui_beedd2)ט): ${stop.stopCode}",
                                                     fontSize = 12.sp,
                                                     color = MaterialTheme.colorScheme.primary
                                                 )
@@ -995,7 +997,7 @@ fun TransitMapScreen(
                     shadowElevation = 2.dp
                 ) {
                     Text(
-                        text = "להצגת תחנות וקווים על המפה, יש לייבא נתוני תחבורה במסך 'עדכון נתונים'.",
+                        text = stringResource(R.string.ui_8216ef),
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -1088,7 +1090,7 @@ fun TransitMapScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "מספר תחנה (מק\"ט): ${stop.stopCode}",
+                                text = stringResource(R.string.ui_beedd2)ט): ${stop.stopCode}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Medium
@@ -1105,12 +1107,12 @@ fun TransitMapScreen(
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("סגירה")
+                            Text(stringResource(R.string.ui_39d88b))
                         }
                     }
 
                     Text(
-                        text = "קווים בתחנה",
+                        text = stringResource(R.string.ui_c7815a),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                     )
@@ -1120,7 +1122,7 @@ fun TransitMapScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp))
                                 Text(
-                                    text = "טוען קווים...",
+                                    text = stringResource(R.string.ui_b1ae2a),
                                     modifier = Modifier.padding(start = 10.dp),
                                     fontSize = 13.sp
                                 )
@@ -1137,7 +1139,7 @@ fun TransitMapScreen(
 
                         selectedLines.isEmpty() -> {
                             Text(
-                                text = "לא נמצאו קווים לתחנה זו",
+                                text = stringResource(R.string.ui_0792d7),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1193,7 +1195,7 @@ fun TransitMapScreen(
 
                     if (!showStopActions && pendingOrigin == null) {
                         Text(
-                            text = "לחץ על הפרטים לבחירת פעולה (פרטי תחנה / תכנון מסלול) ▾",
+                            text = stringResource(R.string.ui_334efa),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
@@ -1227,7 +1229,7 @@ fun TransitMapScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(20.dp)
                                 ) {
-                                    Text("🚏 פתח פרטי תחנה")
+                                    Text(stringResource(R.string.ui_a45d31))
                                 }
                             }
 
@@ -1305,7 +1307,7 @@ fun TransitMapScreen(
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("סגירה")
+                                Text(stringResource(R.string.ui_39d88b))
                             }
                         }
 

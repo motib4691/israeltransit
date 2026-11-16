@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -133,7 +135,7 @@ fun RouteFromButton(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(OperatorTheme.ICON_ROUTE_FROM, fontSize = 13.sp)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("מסלול מכאן", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.ui_55e02c), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -160,7 +162,7 @@ fun RouteToButton(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(OperatorTheme.ICON_ROUTE_TO, fontSize = 13.sp)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("מסלול לכאן", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.ui_04b2a6), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
