@@ -1,5 +1,6 @@
 package il.co.israeltransit.offline.database
 
+import android.database.sqlite.SQLiteDatabase
 import il.co.israeltransit.offline.ui.OperatorTheme
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -34,7 +35,8 @@ class TransitRepository(
         val primaryDestination: String,
         val forwardLine: TransitLine,
         val backwardLine: TransitLine? = null,
-        val isUrban: Boolean = true
+        val isUrban: Boolean = true,
+        val alternativeLabel: String = ""
     )
 
     data class TransitStop(
@@ -75,46 +77,107 @@ class TransitRepository(
         val destCity: String
     )
 
+    private data class StopsSchemaInfo(
+        val hasParentStation: Boolean,
+        val hasStopDesc: Boolean
+    )
+
+    private fun getStopsSchemaInfo(db: SQLiteDatabase): StopsSchemaInfo {
+        var hasParentStation = false
+        var hasStopDesc = false
+        try {
+            db.rawQuery("PRAGMA table_info(stops)", null).use { cursor ->
+                val nameCol = cursor.getColumnIndex("name")
+                if (nameCol >= 0) {
+                    while (cursor.moveToNext()) {
+                        when (cursor.getString(nameCol)) {
+                            "parent_station" -> hasParentStation = true
+                            "stop_desc" -> hasStopDesc = true
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return StopsSchemaInfo(hasParentStation = hasParentStation, hasStopDesc = hasStopDesc)
+    }
+
+    private fun isAlternativeSuffixToken(token: String, altFromDesc: String): Boolean {
+        val clean = token.trim()
+        if (clean.isEmpty()) return true
+        if (clean.contains("#")) return true
+        if (altFromDesc.isNotBlank() && altFromDesc != "#" && clean.equals(altFromDesc, ignoreCase = true)) {
+            return true
+        }
+        if (clean.all { it.isDigit() }) return true
+        if (clean.matches(Regex("^\\d+[א-תa-zA-Z]{1,2}$"))) return true
+        if (clean.matches(Regex("^[א-תa-zA-Z]\\d+$"))) return true
+        if (clean.length == 1 && clean[0] in 'א'..'ת') return true
+        return false
+    }
+
+    private fun splitStationAndCity(
+        rawText: String,
+        altFromDesc: String
+    ): Pair<String, String> {
+        var tokens = rawText.split("-", "–")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        while (tokens.size >= 2 && isAlternativeSuffixToken(tokens.last(), altFromDesc)) {
+            tokens = tokens.dropLast(1)
+        }
+
+        if (tokens.size < 2) {
+            val single = tokens.firstOrNull()?.replace("#", "")?.trim() ?: rawText.trim()
+            return single to ""
+        }
+
+        // זיהוי ערים ששמן כולל מקף (כגון תל אביב-יפו, מודיעין-מכבים-רעות, בנימינה-גבעת עדה)
+        val lastTwo = "${tokens[tokens.size - 2]}-${tokens.last()}"
+        val lastThree = if (tokens.size >= 3) {
+            "${tokens[tokens.size - 3]}-${tokens[tokens.size - 2]}-${tokens.last()}"
+        } else ""
+
+        return when {
+            lastThree.replace(" ", "") == "מודיעין-מכבים-רעות" && tokens.size >= 4 -> {
+                val city = tokens.takeLast(3).joinToString("-")
+                val station = tokens.dropLast(3).joinToString("-")
+                station to city
+            }
+            (lastTwo.replace(" ", "") in setOf("תלאביב-יפו", "בנימינה-גבעתעדה")) && tokens.size >= 3 -> {
+                val city = tokens.takeLast(2).joinToString("-")
+                val station = tokens.dropLast(2).joinToString("-")
+                station to city
+            }
+            else -> {
+                val city = tokens.last().replace("#", "").trim()
+                val station = tokens.dropLast(1).joinToString("-")
+                station to city
+            }
+        }
+    }
+
     /**
      * פירוק מדויק של שמות התחנות והערים מתוך route_long_name לפי הפורמט של משרד התחבורה:
      * תחנת מוצא-עיר מוצא<->תחנת יעד-עיר יעד-חלופה
      */
-    private fun parseRouteLongName(longName: String): ParsedRouteName {
+    private fun parseRouteLongName(
+        longName: String,
+        routeDesc: String = ""
+    ): ParsedRouteName {
         val clean = longName.trim()
         if (clean.isEmpty()) return ParsedRouteName("", "", "", "")
+
+        val altFromDesc = routeDesc.split("-", "–").getOrNull(2)?.trim().orEmpty()
 
         val mainParts = clean.split("<->", "⟷", "<=>")
         if (mainParts.size >= 2) {
             val rawOrigin = mainParts[0].trim()
             val rawDest = mainParts[1].trim()
 
-            var originTokens = rawOrigin.split("-", "–").map { it.trim() }.filter { it.isNotEmpty() }
-            while (originTokens.isNotEmpty() && (originTokens.last().all { it.isDigit() } || originTokens.last().contains("#"))) {
-                originTokens = originTokens.dropLast(1)
-            }
-
-            val (origStation, origCity) = if (originTokens.size >= 2) {
-                val city = originTokens.last().replace("#", "").trim()
-                val station = originTokens.dropLast(1).joinToString("-")
-                station to city
-            } else {
-                rawOrigin to ""
-            }
-
-            var destTokens = rawDest.split("-", "–").map { it.trim() }.filter { it.isNotEmpty() }
-            while (destTokens.isNotEmpty() && (destTokens.last().all { it.isDigit() } || destTokens.last().contains("#"))) {
-                destTokens = destTokens.dropLast(1)
-            }
-
-            val (destStation, destCity) = if (destTokens.size >= 2) {
-                val city = destTokens.last().replace("#", "").trim()
-                val station = destTokens.dropLast(1).joinToString("-")
-                station to city
-            } else if (destTokens.isNotEmpty()) {
-                destTokens.first().replace("#", "").trim() to ""
-            } else {
-                rawDest to ""
-            }
+            val (origStation, origCity) = splitStationAndCity(rawOrigin, altFromDesc)
+            val (destStation, destCity) = splitStationAndCity(rawDest, altFromDesc)
 
             return ParsedRouteName(origStation, origCity, destStation, destCity)
         }
@@ -147,7 +210,7 @@ class TransitRepository(
                         val routeType = cursor.getString(5) ?: ""
                         val routeDesc = if (cursor.columnCount > 6) cursor.getString(6) ?: "" else ""
 
-                        val parsed = parseRouteLongName(longName)
+                        val parsed = parseRouteLongName(longName, routeDesc)
 
                         add(
                             TransitLine(
@@ -244,9 +307,15 @@ class TransitRepository(
         }
     }
 
+    private fun alternativeSortKey(line: TransitLine): Pair<Int, String> {
+        val alt = line.routeDesc.split("-", "–").getOrNull(2)?.trim().orEmpty()
+        val isPrimary = alt.isEmpty() || alt == "#" || alt == "0" || alt == "1" || alt == "2"
+        return (if (isPrimary) 0 else 1) to alt
+    }
+
     /**
-     * חיפוש קווים מאוחד: מקבץ את שני הכיוונים של אותו קו לכרטיסייה אחת,
-     * עם תמיכה בסינון לפי עיר ולפי מפעיל (אופציונליים).
+     * חיפוש קווים מאוחד: מקבץ את שני הכיוונים של כל חלופה לכרטיסייה אחת,
+     * עם תמיכה בסינון לפי עיר ולפי מפעיל וציון 'חלופה 1', 'חלופה 2' כשיש מספר חלופות לאותו קו.
      */
     fun searchGroupedLines(
         query: String = "",
@@ -265,7 +334,6 @@ class TransitRepository(
         val conditions = mutableListOf<String>()
         val args = mutableListOf<String>()
 
-        // חיפוש לפי מספר קו בלבד
         if (cleanQuery.isNotEmpty()) {
             conditions.add("r.route_short_name LIKE ?")
             args.add("$cleanQuery%")
@@ -297,79 +365,120 @@ class TransitRepository(
                 r.route_id
             LIMIT ?
             """.trimIndent(),
-            (args + listOf(cleanQuery, (limit * 3).coerceIn(1, 1000).toString())).toTypedArray()
+            (args + listOf(cleanQuery, (limit * 6).coerceIn(1, 2000).toString())).toTypedArray()
         )
 
-        // קיבוץ לפי מק"ט קו רישוי מתוך route_desc + חלופה
-        val groupedMap = linkedMapOf<String, MutableList<TransitLine>>()
+        // קיבוץ ראשי לפי מק"ט הקו הראשי (ללא חלופה) כדי לאחד חלופות של אותו קו
+        val lineRefGroups = linkedMapOf<String, MutableList<TransitLine>>()
         for (line in rawLines) {
             val descParts = line.routeDesc.split("-", "–")
             val lineRef = descParts.getOrNull(0)?.trim().orEmpty()
-            val alternative = descParts.getOrNull(2)?.trim().orEmpty()
 
             val key = if (lineRef.isNotEmpty()) {
-                "${line.agencyId}_${line.lineNumber}_${lineRef}_${alternative}"
+                "${line.agencyId}_${line.lineNumber}_${lineRef}"
             } else {
                 val cA = line.originCity.ifBlank { extractCity(line.originName) }
                 val cB = line.destinationCity.ifBlank { extractCity(line.destinationName) }
                 "${line.agencyId}_${line.lineNumber}_${formatCityHeader(cA, cB)}"
             }
 
-            groupedMap.getOrPut(key) { mutableListOf() }.add(line)
+            lineRefGroups.getOrPut(key) { mutableListOf() }.add(line)
         }
 
         val result = mutableListOf<GroupedTransitLine>()
-        for ((_, linesList) in groupedMap) {
-            // כיוון 1 כהלוך וכיוון 2 כחזור
-            val forward = linesList.firstOrNull {
+
+        for ((_, linesList) in lineRefGroups) {
+            val dir1 = linesList.filter {
                 it.routeDesc.split("-", "–").getOrNull(1)?.trim() == "1"
-            } ?: linesList.first()
+            }.sortedWith(compareBy<TransitLine> { alternativeSortKey(it).first }.thenBy { alternativeSortKey(it).second })
 
-            val backward = linesList.firstOrNull {
-                it.routeDesc.split("-", "–").getOrNull(1)?.trim() == "2" && it != forward
-            } ?: linesList.getOrNull(1)?.takeIf { it != forward }
+            val dir2 = linesList.filter {
+                it.routeDesc.split("-", "–").getOrNull(1)?.trim() == "2"
+            }.sortedWith(compareBy<TransitLine> { alternativeSortKey(it).first }.thenBy { alternativeSortKey(it).second })
 
-            val originStation = forward.originName.ifBlank { forward.name }
-            val destStation = forward.destinationName.ifBlank { backward?.originName.orEmpty() }
+            val remaining = linesList.filter { it !in dir1 && it !in dir2 }
 
-            val cityA = forward.originCity.ifBlank { backward?.destinationCity.orEmpty() }
-            val cityB = forward.destinationCity.ifBlank { backward?.originCity.orEmpty() }
-
-            val normA = OperatorTheme.normalizeHebrew(cityA)
-            val normB = OperatorTheme.normalizeHebrew(cityB)
-            val isUrban = cityA.isNotBlank() && cityB.isNotBlank() && (normA == normB || normA.contains(normB) || normB.contains(normA))
-
-            val cityHeader = if (isUrban || cityB.isBlank()) {
-                cityA.ifBlank { cityB }
+            val pairs = mutableListOf<Pair<TransitLine, TransitLine?>>()
+            if (dir1.isNotEmpty() || dir2.isNotEmpty()) {
+                val maxPairs = maxOf(dir1.size, dir2.size)
+                for (i in 0 until maxPairs) {
+                    val fwd = dir1.getOrNull(i) ?: dir2.getOrNull(i) ?: continue
+                    val bwd = if (dir1.getOrNull(i) != null) dir2.getOrNull(i) else null
+                    pairs.add(fwd to bwd)
+                }
+                for (extra in remaining) {
+                    pairs.add(extra to null)
+                }
             } else {
-                "$cityA ⟷ $cityB"
-            }
-
-            // סינון לפי עיר: בדיקה אך ורק מול שמות הערים המבודדים
-            if (cleanCity.isNotEmpty()) {
-                val normCity = OperatorTheme.normalizeHebrew(cleanCity)
-                val normOrigCity = OperatorTheme.normalizeHebrew(cityA)
-                val normDestCity = OperatorTheme.normalizeHebrew(cityB)
-                val matchesCity = normOrigCity.contains(normCity) || normDestCity.contains(normCity)
-                if (!matchesCity) {
-                    continue
+                var idx = 0
+                while (idx < linesList.size) {
+                    val fwd = linesList[idx]
+                    val bwd = linesList.getOrNull(idx + 1)
+                    pairs.add(fwd to bwd)
+                    idx += 2
                 }
             }
 
-            result.add(
-                GroupedTransitLine(
-                    lineNumber = forward.lineNumber,
-                    agencyName = forward.agencyName,
-                    agencyId = forward.agencyId,
-                    routeType = forward.routeType,
-                    cityHeader = cityHeader,
-                    primaryOrigin = originStation,
-                    primaryDestination = destStation,
-                    forwardLine = forward,
-                    backwardLine = backward,
-                    isUrban = isUrban
+            val fallbackCityA = linesList.firstNotNullOfOrNull { it.originCity.ifBlank { null } }.orEmpty()
+            val fallbackCityB = linesList.firstNotNullOfOrNull { it.destinationCity.ifBlank { null } }.orEmpty()
+
+            val showAlternativeNumbers = pairs.size > 1
+
+            for ((pairIndex, pair) in pairs.withIndex()) {
+                val forward = pair.first
+                val backward = pair.second
+
+                val originStation = forward.originName.ifBlank { forward.name }
+                val destStation = forward.destinationName.ifBlank { backward?.originName.orEmpty() }
+
+                val cityA = forward.originCity
+                    .ifBlank { backward?.destinationCity.orEmpty() }
+                    .ifBlank { fallbackCityA }
+                val cityB = forward.destinationCity
+                    .ifBlank { backward?.originCity.orEmpty() }
+                    .ifBlank { fallbackCityB }
+
+                val normA = OperatorTheme.normalizeHebrew(cityA)
+                val normB = OperatorTheme.normalizeHebrew(cityB)
+                val isUrban = cityA.isNotBlank() && cityB.isNotBlank() &&
+                    (normA == normB || normA.contains(normB) || normB.contains(normA))
+
+                val cityHeader = if (isUrban || cityB.isBlank()) {
+                    cityA.ifBlank { cityB }
+                } else {
+                    "$cityA ⟷ $cityB"
+                }
+
+                if (cleanCity.isNotEmpty()) {
+                    val normCity = OperatorTheme.normalizeHebrew(cleanCity)
+                    val normOrigCity = OperatorTheme.normalizeHebrew(cityA)
+                    val normDestCity = OperatorTheme.normalizeHebrew(cityB)
+                    val matchesCity = normOrigCity.contains(normCity) || normDestCity.contains(normCity)
+                    if (!matchesCity) {
+                        continue
+                    }
+                }
+
+                val altLabel = if (showAlternativeNumbers) "חלופה ${pairIndex + 1}" else ""
+
+                result.add(
+                    GroupedTransitLine(
+                        lineNumber = forward.lineNumber,
+                        agencyName = forward.agencyName,
+                        agencyId = forward.agencyId,
+                        routeType = forward.routeType,
+                        cityHeader = cityHeader,
+                        primaryOrigin = originStation,
+                        primaryDestination = destStation,
+                        forwardLine = forward,
+                        backwardLine = backward,
+                        isUrban = isUrban,
+                        alternativeLabel = altLabel
+                    )
                 )
-            )
+
+                if (result.size >= limit) break
+            }
 
             if (result.size >= limit) break
         }
@@ -397,8 +506,127 @@ class TransitRepository(
         ).firstOrNull()
     }
 
+    fun findOppositeLine(line: TransitLine): TransitLine? {
+        val descParts = line.routeDesc.split("-", "–")
+        val lineRef = descParts.getOrNull(0)?.trim().orEmpty()
+        val dir = descParts.getOrNull(1)?.trim().orEmpty()
+        val alt = descParts.getOrNull(2)?.trim().orEmpty()
+
+        val targetDir = when (dir) {
+            "1" -> "2"
+            "2" -> "1"
+            else -> ""
+        }
+
+        if (lineRef.isNotEmpty() && targetDir.isNotEmpty()) {
+            val candidates = queryLines(
+                """
+                SELECT
+                    r.route_id,
+                    COALESCE(r.route_short_name, ''),
+                    COALESCE(r.route_long_name, ''),
+                    COALESCE(r.agency_id, ''),
+                    COALESCE(a.agency_name, ''),
+                    COALESCE(r.route_type, ''),
+                    COALESCE(r.route_desc, '')
+                FROM routes r
+                LEFT JOIN agency a ON a.agency_id = r.agency_id
+                WHERE r.route_short_name = ?
+                  AND r.agency_id = ?
+                  AND (r.route_desc LIKE ? OR r.route_desc LIKE ?)
+                  AND r.route_id != ?
+                LIMIT 20
+                """.trimIndent(),
+                arrayOf(
+                    line.lineNumber,
+                    line.agencyId,
+                    "$lineRef-$targetDir-%",
+                    "$lineRef–$targetDir–%",
+                    line.routeId
+                )
+            )
+
+            if (candidates.isNotEmpty()) {
+                val sortedSameDir = queryLines(
+                    """
+                    SELECT
+                        r.route_id,
+                        COALESCE(r.route_short_name, ''),
+                        COALESCE(r.route_long_name, ''),
+                        COALESCE(r.agency_id, ''),
+                        COALESCE(a.agency_name, ''),
+                        COALESCE(r.route_type, ''),
+                        COALESCE(r.route_desc, '')
+                    FROM routes r
+                    LEFT JOIN agency a ON a.agency_id = r.agency_id
+                    WHERE r.route_short_name = ?
+                      AND r.agency_id = ?
+                      AND (r.route_desc LIKE ? OR r.route_desc LIKE ?)
+                    LIMIT 20
+                    """.trimIndent(),
+                    arrayOf(
+                        line.lineNumber,
+                        line.agencyId,
+                        "$lineRef-$dir-%",
+                        "$lineRef–$dir–%"
+                    )
+                ).sortedWith(compareBy<TransitLine> { alternativeSortKey(it).first }.thenBy { alternativeSortKey(it).second })
+
+                val sortedOpposite = candidates.sortedWith(
+                    compareBy<TransitLine> { alternativeSortKey(it).first }.thenBy { alternativeSortKey(it).second }
+                )
+
+                val myIndex = sortedSameDir.indexOfFirst { it.routeId == line.routeId }
+                if (myIndex >= 0 && myIndex < sortedOpposite.size) {
+                    return sortedOpposite[myIndex]
+                }
+
+                val exactAltMatch = sortedOpposite.firstOrNull {
+                    it.routeDesc.split("-", "–").getOrNull(2)?.trim() == alt
+                }
+                return exactAltMatch ?: sortedOpposite.first()
+            }
+        }
+
+        val fallback = queryLines(
+            """
+            SELECT
+                r.route_id,
+                COALESCE(r.route_short_name, ''),
+                COALESCE(r.route_long_name, ''),
+                COALESCE(r.agency_id, ''),
+                COALESCE(a.agency_name, ''),
+                COALESCE(r.route_type, ''),
+                COALESCE(r.route_desc, '')
+            FROM routes r
+            LEFT JOIN agency a ON a.agency_id = r.agency_id
+            WHERE r.route_short_name = ?
+              AND r.agency_id = ?
+              AND r.route_id != ?
+            LIMIT 20
+            """.trimIndent(),
+            arrayOf(line.lineNumber, line.agencyId, line.routeId)
+        )
+
+        return fallback.firstOrNull {
+            val normOrig = OperatorTheme.normalizeHebrew(it.originName)
+            val normDest = OperatorTheme.normalizeHebrew(line.destinationName)
+            normOrig.isNotEmpty() && normDest.isNotEmpty() && normOrig == normDest
+        } ?: fallback.firstOrNull()
+    }
+
+    private fun normalizeStopQuery(text: String): String {
+        return text
+            .replace("[\"'״׳]".toRegex(), "")
+            .replace("[/\\-–]".toRegex(), " ")
+            .replace("\\s+".toRegex(), " ")
+            .trim()
+            .lowercase()
+    }
+
     /**
-     * חיפוש תחנות ורחובות עם נירמול עברי חכם ותמיכה בהצגת תחנות שמורות אישיות בראש התוצאות
+     * חיפוש תחנות ורחובות עם נירמול עברי חכם (מתעלם מסימונים כמו ", ', / ומריבוי רווחים)
+     * ותמיכה בהצגת תחנות שמורות אישיות בראש התוצאות
      */
     fun searchStops(
         searchText: String,
@@ -408,19 +636,35 @@ class TransitRepository(
         val raw = searchText.trim()
         if (raw.isEmpty()) return emptyList()
 
-        val cleanQuery = raw.replace("[\"'״׳]".toRegex(), "")
-        val normQuery = OperatorTheme.normalizeHebrew(raw)
+        val normQuery = normalizeStopQuery(raw)
+        val tokens = normQuery.split(" ").filter { it.isNotEmpty() }
+        if (tokens.isEmpty() && raw.isEmpty()) return emptyList()
 
         val matchedSavedStops = savedStops.filter { saved ->
-            val normCustom = OperatorTheme.normalizeHebrew(saved.customName)
-            normCustom.contains(normQuery) || saved.stopCode.startsWith(raw)
+            val normCustom = normalizeStopQuery(saved.customName)
+            val matchesWords = tokens.isNotEmpty() && tokens.all { normCustom.contains(it) }
+            matchesWords || saved.stopCode.startsWith(raw)
         }
 
         val db = databaseProvider.openReadOnly() ?: return emptyList()
 
         return try {
-            val dbStops = db.rawQuery(
-                """
+            val normalizedStopSql =
+                "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(stop_name, ''), '\"', ''), '''', ''), '״', ''), '׳', ''), '/', ' '), '-', ' '), '–', ' '))"
+
+            val wordConditions = if (tokens.isNotEmpty()) {
+                tokens.joinToString(" AND ") { "$normalizedStopSql LIKE ?" }
+            } else {
+                "stop_name LIKE ?"
+            }
+
+            val wordArgs = if (tokens.isNotEmpty()) {
+                tokens.map { "%$it%" }
+            } else {
+                listOf("%$raw%")
+            }
+
+            val sql = """
                 SELECT
                     stop_id,
                     COALESCE(NULLIF(stop_code, ''), stop_id) AS real_stop_code,
@@ -428,28 +672,32 @@ class TransitRepository(
                     stop_lat,
                     stop_lon
                 FROM stops
-                WHERE stop_name LIKE ? OR stop_name LIKE ? OR stop_code LIKE ? OR stop_id LIKE ?
+                WHERE ($wordConditions)
+                   OR stop_code LIKE ?
+                   OR stop_id LIKE ?
                 ORDER BY
                     CASE
                         WHEN stop_code = ? THEN 0
                         WHEN stop_id = ? THEN 1
-                        WHEN stop_name LIKE ? THEN 2
-                        ELSE 3
+                        WHEN $normalizedStopSql LIKE ? THEN 2
+                        WHEN stop_name LIKE ? THEN 3
+                        ELSE 4
                     END,
                     stop_name
                 LIMIT ?
-                """.trimIndent(),
-                arrayOf(
-                    "%$raw%",
-                    "%$cleanQuery%",
-                    "$raw%",
-                    "$raw%",
-                    raw,
-                    raw,
-                    "$raw%",
-                    limit.coerceIn(1, 500).toString()
-                )
-            ).use { cursor ->
+            """.trimIndent()
+
+            val queryArgs = wordArgs + listOf(
+                "$raw%",
+                "$raw%",
+                raw,
+                raw,
+                "$normQuery%",
+                "$raw%",
+                limit.coerceIn(1, 500).toString()
+            )
+
+            val dbStops = db.rawQuery(sql, queryArgs.toTypedArray()).use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) {
                         val sId = cursor.getString(0) ?: ""
@@ -508,6 +756,93 @@ class TransitRepository(
             }
 
             finalStops.take(limit)
+        } finally {
+            db.close()
+        }
+    }
+
+    fun getStopById(
+        stopId: String,
+        savedStops: List<SavedStopRef> = emptyList()
+    ): TransitStop? {
+        if (stopId.isBlank()) return null
+        val db = databaseProvider.openReadOnly() ?: return null
+        return try {
+            db.rawQuery(
+                """
+                SELECT
+                    stop_id,
+                    COALESCE(NULLIF(stop_code, ''), stop_id) AS real_stop_code,
+                    COALESCE(stop_name, ''),
+                    stop_lat,
+                    stop_lon
+                FROM stops
+                WHERE stop_id = ?
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(stopId)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val sId = cursor.getString(0) ?: stopId
+                    TransitStop(
+                        stopId = sId,
+                        stopCode = cursor.getString(1) ?: sId,
+                        name = cursor.getString(2) ?: "",
+                        latitude = if (cursor.isNull(3)) null else cursor.getDouble(3),
+                        longitude = if (cursor.isNull(4)) null else cursor.getDouble(4),
+                        customName = savedStops.firstOrNull { it.stopId == sId }?.customName
+                    )
+                } else null
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+    fun getStopCity(stopId: String): String {
+        if (stopId.isBlank()) return ""
+        val db = databaseProvider.openReadOnly() ?: return ""
+        return try {
+            val schema = getStopsSchemaInfo(db)
+            if (!schema.hasStopDesc) return ""
+
+            val cityRegex = Regex("עיר:\\s*([^\\n\\r]+?)(?=\\s+(?:רציף|קומה|רחוב|שכונה|אזור):|$)")
+
+            fun extractFromDesc(desc: String?): String {
+                if (desc.isNullOrBlank()) return ""
+                return cityRegex.find(desc)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+            }
+
+            val sql = if (schema.hasParentStation) {
+                "SELECT COALESCE(stop_desc, ''), COALESCE(parent_station, '') FROM stops WHERE stop_id = ? LIMIT 1"
+            } else {
+                "SELECT COALESCE(stop_desc, ''), '' FROM stops WHERE stop_id = ? LIMIT 1"
+            }
+
+            var parentStation = ""
+            db.rawQuery(sql, arrayOf(stopId)).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val city = extractFromDesc(cursor.getString(0))
+                    if (city.isNotBlank()) return city
+                    parentStation = cursor.getString(1) ?: ""
+                }
+            }
+
+            if (schema.hasParentStation && parentStation.isNotBlank()) {
+                db.rawQuery(
+                    "SELECT COALESCE(stop_desc, '') FROM stops WHERE stop_id = ? LIMIT 1",
+                    arrayOf(parentStation)
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val city = extractFromDesc(cursor.getString(0))
+                        if (city.isNotBlank()) return city
+                    }
+                }
+            }
+
+            ""
+        } catch (_: Exception) {
+            ""
         } finally {
             db.close()
         }
@@ -716,6 +1051,19 @@ class TransitRepository(
         val db = databaseProvider.openReadOnly() ?: return emptyList()
 
         return try {
+            val schema = getStopsSchemaInfo(db)
+            val stopFilterSql = if (schema.hasParentStation) {
+                "(st.stop_id = ? OR st.stop_id IN (SELECT stop_id FROM stops WHERE parent_station = ?))"
+            } else {
+                "st.stop_id = ?"
+            }
+
+            val queryArgs = if (schema.hasParentStation) {
+                arrayOf(stopId, stopId, limit.coerceIn(1, 500).toString())
+            } else {
+                arrayOf(stopId, limit.coerceIn(1, 500).toString())
+            }
+
             db.rawQuery(
                 """
                 SELECT DISTINCT
@@ -730,18 +1078,16 @@ class TransitRepository(
                 JOIN trips t ON t.trip_id = st.trip_id
                 JOIN routes r ON r.route_id = t.route_id
                 LEFT JOIN agency a ON a.agency_id = r.agency_id
-                WHERE st.stop_id = ?
+                WHERE $stopFilterSql
                 LIMIT ?
                 """.trimIndent(),
-                arrayOf(
-                    stopId,
-                    limit.coerceIn(1, 500).toString()
-                )
+                queryArgs
             ).use { cursor ->
                 val lines = mutableListOf<TransitLine>()
                 while (cursor.moveToNext()) {
                     val longName = cursor.getString(2) ?: ""
-                    val parsed = parseRouteLongName(longName)
+                    val routeDesc = cursor.getString(6) ?: ""
+                    val parsed = parseRouteLongName(longName, routeDesc)
 
                     lines.add(
                         TransitLine(
@@ -755,7 +1101,7 @@ class TransitRepository(
                             destinationName = parsed.destStation,
                             originCity = parsed.originCity,
                             destinationCity = parsed.destCity,
-                            routeDesc = cursor.getString(6) ?: ""
+                            routeDesc = routeDesc
                         )
                     )
                 }
