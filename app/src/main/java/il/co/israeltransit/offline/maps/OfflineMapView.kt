@@ -1,6 +1,9 @@
 
 package il.co.israeltransit.offline.maps
 
+import androidx.compose.ui.res.stringResource
+import il.co.israeltransit.offline.R
+
 import android.content.Context
 import android.os.Bundle
 import androidx.compose.runtime.Composable
@@ -117,7 +120,7 @@ fun OfflineMapView(
 
         if (!file.exists() || !file.isFile) {
             currentOnMapError.value?.invoke(
-                "קובץ המפה אינו נמצא"
+                stringResource(R.string.ui_1524fa)
             )
         } else if (!file.canRead() || file.length() <= 0L) {
             currentOnMapError.value?.invoke(

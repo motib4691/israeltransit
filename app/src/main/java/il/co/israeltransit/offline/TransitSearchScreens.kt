@@ -344,7 +344,7 @@ private fun UpcomingDepartureRow(
     onClick: () -> Unit
 ) {
     val timeText = dep.departureAt.format(timeFormatter)
-    val diffText = "עוד $diffMinutes דק'"
+    val diffText = stringResource(R.string.ui_ee6287, diffMinutes)
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
@@ -723,7 +723,7 @@ fun StopSearchScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         SearchScreenTopHeader(
-            title = if (selectedStop == null) "חיפוש תחנה" else "פרטי תחנה",
+            title = if (selectedStop == null) stringResource(R.string.ui_07ae91) else stringResource(R.string.ui_286744),
             onBack = onBack
         )
 
@@ -838,9 +838,9 @@ fun StopSearchScreen(
                     Text(stop.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(
                         text = if (activePlatform != null) {
-                            "מספר תחנה (מק\"ט): ${stop.stopCode} • ${activePlatform.displayLabel} (מק\"ט ${activePlatform.stopCode})"
+                            stringResource(R.string.ui_53b5a3, stop.stopCode, activePlatform.displayLabel, activePlatform.stopCode)
                         } else {
-                            "מספר תחנה (מק\"ט): ${stop.stopCode}"
+                            stringResource(R.string.ui_5d32ff, stop.stopCode)
                         },
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -900,9 +900,9 @@ fun StopSearchScreen(
                         ) {
                             Text(
                                 text = if (activePlatform != null) {
-                                    "בחירת רציף: ${activePlatform.displayLabel} ▾"
+                                    stringResource(R.string.ui_f5cbac, activePlatform.displayLabel)
                                 } else {
-                                    "בחירת רציף: כל הרציפים (${platforms.size}) ▾"
+                                    stringResource(R.string.ui_0ba747, platforms.size)
                                 },
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold
@@ -930,14 +930,14 @@ fun StopSearchScreen(
                             shape = RoundedCornerShape(20.dp)
                         )
                         FilterChip(
-                            selected = filterMode == "היום",
+                            selected = filterMode == stringResource(R.string.ui_71958d),
                             onClick = {
                                 DatePickerDialog(context, { _, y, m, d ->
                                     selectedDate = LocalDate.of(y, m + 1, d)
                                     filterMode = "היום"
                                 }, selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth).show()
                             },
-                            label = { Text(if (filterMode == "היום") "${selectedDate.dayOfMonth}/${selectedDate.monthValue}" else "תאריך ▾") },
+                            label = { Text(if (filterMode == stringResource(R.string.ui_71958d)) "${selectedDate.dayOfMonth}/${selectedDate.monthValue}" else stringResource(R.string.ui_a92e9d)) },
                             shape = RoundedCornerShape(20.dp)
                         )
                         FilterChip(
@@ -973,7 +973,7 @@ fun StopSearchScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                         ) {
-                            Text(if (departuresLimit == 10) "הצג 20 נסיעות נוספות" else "הסתר 20 נסיעות נוספות")
+                            Text(if (departuresLimit == 10) stringResource(R.string.ui_5652c1) else stringResource(R.string.ui_51efc4))
                         }
                     }
                 }
@@ -1636,7 +1636,7 @@ fun LineSearchScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         SearchScreenTopHeader(
-            title = if (selectedLine == null) "חיפוש קו" else "קו ${selectedLine!!.lineNumber}",
+            title = if (selectedLine == null) stringResource(R.string.ui_44a8a7) else "קו ${selectedLine!!.lineNumber}",
             onBack = onBack
         )
 
@@ -2210,7 +2210,7 @@ fun LineSearchScreen(
                             onClick = { showDayPickerDialog = true },
                             label = {
                                 Text(
-                                    text = if (isTodayMode) "בחירת יום ▾" else "${hebrewDayName(selectedDayOfWeek)} ▾",
+                                    text = if (isTodayMode) stringResource(R.string.ui_4b545f) else "${hebrewDayName(selectedDayOfWeek)} ▾",
                                     fontSize = 12.sp
                                 )
                             },
