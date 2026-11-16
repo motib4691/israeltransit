@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -98,7 +100,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה למסך הבית")
+                Text(stringResource(R.string.ui_55a91f))
             }
         }
 
@@ -117,12 +119,12 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("מאגר נתוני תחבורה (GTFS)", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_5d9aa0), fontWeight = FontWeight.Bold)
                 if (databaseAvailable) {
-                    Text("מותקן במכשיר", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.ui_f2a626), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("עדכון אחרון: ${dateFormatter.format(Date(lastUpdate))}", style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Text("עדיין לא הותקן מאגר נתונים", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_a22858), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 FilledTonalButton(
                     onClick = { transitFilePicker.launch(arrayOf("*/*")) },
@@ -130,7 +132,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("ייבוא קובץ נתוני תחבורה (israel-transit.sqlite.gz)")
+                    Text(stringResource(R.string.ui_ef9a63))
                 }
             }
         }
@@ -144,9 +146,9 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("חבילת מפה וניווט לא מקוונת", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_25d00a), fontWeight = FontWeight.Bold)
                 if (mapAvailable) {
-                    Text("קובץ מפה מותקן ותקין", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.ui_581f3d), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     if (addressesAvailable && walkingGraphAvailable) {
                         Text(
                             text = "כולל חיפוש רחובות וכתובות ורשת ניווט להולכי רגל",
@@ -161,7 +163,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                         )
                     }
                 } else {
-                    Text("עדיין לא הותקנה חבילת מפה (אופציונלי)", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_e91a4e), style = MaterialTheme.typography.bodySmall)
                 }
                 FilledTonalButton(
                     onClick = { mapFilePicker.launch(arrayOf("*/*")) },
@@ -169,7 +171,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("ייבוא חבילת מפה (israel-map-pack.zip)")
+                    Text(stringResource(R.string.ui_a8b1b4))
                 }
             }
         }
@@ -183,7 +185,7 @@ fun UpdateDataScreen(onBack: () -> Unit) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("מיקום אחסון הקבצים", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_7b8b71), fontWeight = FontWeight.Bold)
                 locations.forEach { loc ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),

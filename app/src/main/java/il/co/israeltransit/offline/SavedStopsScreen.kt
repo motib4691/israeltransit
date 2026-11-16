@@ -1,5 +1,7 @@
 package il.co.israeltransit.offline
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -188,7 +190,7 @@ fun SavedStopsScreen(
                     OutlinedTextField(
                         value = customName,
                         onValueChange = { customName = it },
-                        label = { Text("שם אישי, למשל בית או עבודה") },
+                        label = { Text(stringResource(R.string.ui_0f9fe3)) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -220,7 +222,7 @@ fun SavedStopsScreen(
                     shape = RoundedCornerShape(20.dp),
                     enabled = customName.trim().isNotEmpty()
                 ) {
-                    Text("שמירה")
+                    Text(stringResource(R.string.ui_287524))
                 }
             },
             dismissButton = {
@@ -230,7 +232,7 @@ fun SavedStopsScreen(
                         editingStop = null
                     }
                 ) {
-                    Text("ביטול")
+                    Text(stringResource(R.string.ui_5fac05))
                 }
             }
         )
@@ -260,7 +262,7 @@ fun SavedStopsScreen(
                 onClick = onBack,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("חזרה למסך הבית")
+                Text(stringResource(R.string.ui_55a91f))
             }
         }
 
@@ -285,14 +287,14 @@ fun SavedStopsScreen(
         )
 
         if (!database.isDatabaseAvailable()) {
-            Text("יש להתקין תחילה מאגר נתונים במסך עדכון נתונים.")
+            Text(stringResource(R.string.ui_7746fd))
         } else if (searching) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 CircularProgressIndicator()
             }
         } else if (query.isNotBlank()) {
             if (searchResults.isEmpty()) {
-                Text("לא נמצאו תחנות מתאימות.")
+                Text(stringResource(R.string.ui_1c603b))
             }
 
             searchResults.forEach { stop ->
@@ -433,7 +435,7 @@ fun SavedStopsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("שינוי שם", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_09bd0f), fontSize = 12.sp)
                         }
 
                         OutlinedButton(
@@ -443,7 +445,7 @@ fun SavedStopsScreen(
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("הסרה", fontSize = 12.sp)
+                            Text(stringResource(R.string.ui_e4844e), fontSize = 12.sp)
                         }
                     }
                 }

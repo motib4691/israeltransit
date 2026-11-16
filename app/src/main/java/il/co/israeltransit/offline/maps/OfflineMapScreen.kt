@@ -1,5 +1,8 @@
 package il.co.israeltransit.offline.maps
 
+import androidx.compose.ui.res.stringResource
+import il.co.israeltransit.offline.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +66,7 @@ fun OfflineMapScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = onBack, shape = RoundedCornerShape(20.dp)) {
-                        Text("חזרה למסך הבית")
+                        Text(stringResource(R.string.ui_55a91f))
                     }
                 }
             }
@@ -111,7 +114,7 @@ fun OfflineMapScreen(
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = { mapErrorMessage = null }) {
-                        Text("סגירה")
+                        Text(stringResource(R.string.ui_39d88b))
                     }
                 }
             }
