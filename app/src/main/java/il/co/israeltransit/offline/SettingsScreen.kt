@@ -255,8 +255,8 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = if (maxTransfers == 0) "נסיעה ישירה בלבד (ללא החלפות)"
-                           else "$maxTransfers החלפות לכל היותר",
+                    text = if (maxTransfers == 0) stringResource(R.string.ui_0b906f)
+                           else stringResource(R.string.ui_661afb, maxTransfers),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Bold
@@ -346,9 +346,9 @@ fun SettingsScreen(
                         )
                         Text(
                             text = if (allowWalkingTransfers)
-                                "מאפשר מעבר רגלי קצר (עד 350 מטר) בין תחנות סמוכות"
+                                stringResource(R.string.ui_867737)
                             else
-                                "יוצגו רק מסלולים ישירים או החלפות באותה תחנה בלבד",
+                                stringResource(R.string.ui_f96aca),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -556,9 +556,9 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
-                        AppThemeMode.SYSTEM to "מערכת",
-                        AppThemeMode.LIGHT to "בהיר",
-                        AppThemeMode.DARK to "כהה"
+                        AppThemeMode.SYSTEM to stringResource(R.string.ui_01db4c),
+                        AppThemeMode.LIGHT to stringResource(R.string.ui_6f05e2),
+                        AppThemeMode.DARK to stringResource(R.string.ui_923ee5)
                     ).forEach { (mode, label) ->
                         FilterChip(
                             selected = themeMode == mode,
