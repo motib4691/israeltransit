@@ -424,11 +424,7 @@ private fun UpcomingDepartureRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TransitLineBadge(lineNumber = dep.lineNumber, agencyName = dep.agencyName)
-                    Text(
-                        text = dep.headsign,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(dep.headsign, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(timeText, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
@@ -467,6 +463,10 @@ fun StopSearchScreen(
     var savedSelectedStopId by rememberSaveable(initialStop?.stopId) { mutableStateOf(initialStop?.stopId) }
     var selectedStop by remember { mutableStateOf(initialStop) }
     var oppositeStop by remember { mutableStateOf<TransitRepository.TransitStop?>(null) }
+
+    var platforms by remember { mutableStateOf(emptyList<TransitRepository.StopPlatform>()) }
+    var selectedPlatformId by rememberSaveable(selectedStop?.stopId) { mutableStateOf<String?>(null) }
+    var showPlatformPickerDialog by remember { mutableStateOf(false) }
 
     var stopCity by remember { mutableStateOf("") }
     var departures by remember { mutableStateOf(emptyList<TransitScheduleRepository.Departure>()) }
@@ -531,7 +531,7 @@ fun StopSearchScreen(
         }
     }
 
-    LaunchedEffect(selectedStop, departuresLimit, selectedDate, selectedTime, filterMode) {
+    LaunchedEffect(selectedStop?.stopId) {
         val stop = selectedStop
         if (stop != null) {
             if (stop.latitude == null || stop.longitude == null) {
@@ -544,13 +544,23 @@ fun StopSearchScreen(
             }
             oppositeStop = withContext(Dispatchers.IO) { repository.findOppositeStop(stop) }
             stopCity = withContext(Dispatchers.IO) { repository.getStopCity(stop.stopId) }
+            platforms = withContext(Dispatchers.IO) { repository.getPlatformsForStop(stop.stopId) }
+        } else {
+            platforms = emptyList()
+        }
+    }
+
+    LaunchedEffect(selectedStop?.stopId, selectedPlatformId, departuresLimit, selectedDate, selectedTime, filterMode) {
+        val stop = selectedStop
+        if (stop != null) {
+            val effectiveStopId = selectedPlatformId ?: stop.stopId
             val nowTime = LocalDateTime.now()
             val queryTime = if (filterMode == "עכשיו") nowTime else LocalDateTime.of(selectedDate, selectedTime)
             departures = withContext(Dispatchers.IO) {
-                scheduleRepo.upcomingDepartures(stop.stopId, now = queryTime, limit = departuresLimit)
+                scheduleRepo.upcomingDepartures(effectiveStopId, now = queryTime, limit = departuresLimit)
             }
-            lines = withContext(Dispatchers.IO) { repository.getLinesForStop(stop.stopId, 100) }
-            lineStatuses = withContext(Dispatchers.IO) { scheduleRepo.getLineStatusesForStop(stop.stopId, now = nowTime) }
+            lines = withContext(Dispatchers.IO) { repository.getLinesForStop(effectiveStopId, 100) }
+            lineStatuses = withContext(Dispatchers.IO) { scheduleRepo.getLineStatusesForStop(effectiveStopId, now = nowTime) }
         }
     }
 
@@ -580,6 +590,81 @@ fun StopSearchScreen(
             }
             map.easeCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16.0), 600)
         }
+    }
+
+    if (showPlatformPickerDialog && platforms.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showPlatformPickerDialog = false },
+            title = {
+                Text("בחירת רציף", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val allSelected = selectedPlatformId == null
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (allSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedPlatformId = null
+                                showPlatformPickerDialog = false
+                            }
+                    ) {
+                        Text(
+                            text = "כל הרציפים",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            fontWeight = if (allSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (allSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    platforms.forEach { platform ->
+                        val isSelected = selectedPlatformId == platform.stopId
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedPlatformId = platform.stopId
+                                    showPlatformPickerDialog = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = platform.displayLabel,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "מק\"ט ${platform.stopCode}",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlatformPickerDialog = false }) { Text("סגירה") }
+            }
+        )
     }
 
     historyItemToDelete?.let { item ->
@@ -738,6 +823,7 @@ fun StopSearchScreen(
             }
         } else {
             val stop = selectedStop!!
+            val activePlatform = platforms.firstOrNull { it.stopId == selectedPlatformId }
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -748,7 +834,16 @@ fun StopSearchScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stop.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("מספר תחנה (מק\"ט): ${stop.stopCode}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(
+                        text = if (activePlatform != null) {
+                            "מספר תחנה (מק\"ט): ${stop.stopCode} • ${activePlatform.displayLabel} (מק\"ט ${activePlatform.stopCode})"
+                        } else {
+                            "מספר תחנה (מק\"ט): ${stop.stopCode}"
+                        },
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         onPlanRouteFrom?.let {
@@ -783,6 +878,7 @@ fun StopSearchScreen(
                         if (oppositeStop != null) {
                             OutlinedButton(
                                 onClick = {
+                                    selectedPlatformId = null
                                     savedSelectedStopId = oppositeStop!!.stopId
                                     selectedStop = oppositeStop
                                 },
@@ -791,6 +887,24 @@ fun StopSearchScreen(
                             ) {
                                 Text("תחנה נגדית ⟷", fontSize = 12.sp)
                             }
+                        }
+                    }
+
+                    if (platforms.isNotEmpty()) {
+                        FilledTonalButton(
+                            onClick = { showPlatformPickerDialog = true },
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (activePlatform != null) {
+                                    "בחירת רציף: ${activePlatform.displayLabel} ▾"
+                                } else {
+                                    "בחירת רציף: כל הרציפים (${platforms.size}) ▾"
+                                },
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -933,7 +1047,12 @@ fun StopSearchScreen(
                                                 }
                                             }
                                         }
-                                        Text(text = originAnnotated, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            text = originAnnotated,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
 
                                         if (line.destinationName.isNotBlank()) {
                                             val destAnnotated = buildAnnotatedString {
@@ -945,7 +1064,12 @@ fun StopSearchScreen(
                                                     }
                                                 }
                                             }
-                                            Text(text = destAnnotated, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(
+                                                text = destAnnotated,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
                                         }
 
                                         Spacer(modifier = Modifier.height(4.dp))
@@ -1062,21 +1186,30 @@ fun LineSearchScreen(
 
     var selectedRouteId by rememberSaveable(initialRouteId) { mutableStateOf(initialRouteId) }
     var selectedLine by remember { mutableStateOf<TransitRepository.TransitLine?>(null) }
-    var oppositeLineForSelected by remember { mutableStateOf<TransitRepository.TransitLine?>(null) }
+    var detailsContext by remember { mutableStateOf<TransitRepository.LineDetailsContext?>(null) }
+
+    var isAllAlternativesMode by remember { mutableStateOf(false) }
+    var manualSubVariantId by remember { mutableStateOf<String?>(null) }
+    var showDifferencesDialog by remember { mutableStateOf(false) }
+
     var selectedStopSequenceIndex by rememberSaveable { mutableIntStateOf(0) }
+    var userPickedStopInList by remember { mutableStateOf(false) }
 
     var variants by remember { mutableStateOf(emptyList<RouteVariant>()) }
-    var selectedVariantIndex by remember { mutableIntStateOf(0) }
     var dailyDepartures by remember { mutableStateOf(emptyList<TransitScheduleRepository.Departure>()) }
 
-    var isTodayMode by remember(selectedRouteId) { mutableStateOf(true) }
-    var selectedDayOfWeek by remember(selectedRouteId) { mutableStateOf(scheduleRepo.currentServiceDate().dayOfWeek) }
+    var isTodayMode by remember(selectedRouteId, isAllAlternativesMode) { mutableStateOf(true) }
+    var selectedDayOfWeek by remember(selectedRouteId, isAllAlternativesMode) {
+        mutableStateOf(scheduleRepo.currentServiceDate().dayOfWeek)
+    }
     var showDayPickerDialog by remember { mutableStateOf(false) }
-    var autoCheckedEndOfDay by remember(selectedRouteId) { mutableStateOf(false) }
+    var autoCheckedEndOfDay by remember(selectedRouteId, isAllAlternativesMode) { mutableStateOf(false) }
 
     var nextDepartureInfo by remember { mutableStateOf<TransitScheduleRepository.LineNextDepartureInfo?>(null) }
     var selectedTripIdForTimeline by remember { mutableStateOf<String?>(null) }
+    var selectedTripRouteId by remember { mutableStateOf<String?>(null) }
     var tripStopTimesMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var displayedLineForCard by remember { mutableStateOf<TransitRepository.TransitLine?>(null) }
 
     var isMapFullScreen by remember { mutableStateOf(false) }
     var clickedStopForAction by remember { mutableStateOf<TransitRepository.RouteStop?>(null) }
@@ -1101,12 +1234,20 @@ fun LineSearchScreen(
 
     LaunchedEffect(selectedRouteId) {
         val rId = selectedRouteId
-        if (rId != null && selectedLine?.routeId != rId) {
-            withContext(Dispatchers.IO) {
-                repository.getLine(rId)
-            }?.let { loadedLine ->
-                selectedLine = loadedLine
+        if (rId != null) {
+            if (selectedLine?.routeId != rId) {
+                withContext(Dispatchers.IO) {
+                    repository.getLine(rId)
+                }?.let { loadedLine ->
+                    selectedLine = loadedLine
+                }
             }
+            detailsContext = withContext(Dispatchers.IO) {
+                repository.getLineDetailsContext(rId)
+            }
+        } else {
+            selectedLine = null
+            detailsContext = null
         }
     }
 
@@ -1116,6 +1257,9 @@ fun LineSearchScreen(
         } else {
             selectedLine = null
             selectedRouteId = null
+            isAllAlternativesMode = false
+            manualSubVariantId = null
+            userPickedStopInList = false
         }
     }
 
@@ -1139,51 +1283,81 @@ fun LineSearchScreen(
         }
     }
 
-    LaunchedEffect(selectedLine) {
-        val line = selectedLine
-        if (line != null) {
-            variants = withContext(Dispatchers.IO) { variantRepository.getVariants(line.routeId) }
-            oppositeLineForSelected = withContext(Dispatchers.IO) { repository.findOppositeLine(line) }
-
-            if (!autoCheckedEndOfDay) {
-                val now = LocalDateTime.now()
-                val serviceToday = scheduleRepo.currentServiceDate(now)
-                val todayDeps = withContext(Dispatchers.IO) {
-                    scheduleRepo.getDeparturesForDayOfWeek(line.routeId, serviceToday.dayOfWeek, now = now)
-                }
-                if (todayDeps.isNotEmpty() && todayDeps.none { !it.departureAt.isBefore(now) }) {
-                    isTodayMode = false
-                    selectedDayOfWeek = serviceToday.plusDays(1).dayOfWeek
-                }
-                autoCheckedEndOfDay = true
+    val activeQueryRouteIds = remember(selectedLine, detailsContext, isAllAlternativesMode, manualSubVariantId) {
+        val baseId = selectedLine?.routeId ?: return@remember emptyList()
+        if (manualSubVariantId != null) {
+            listOf(manualSubVariantId!!)
+        } else {
+            val ctx = detailsContext
+            when {
+                ctx == null -> listOf(baseId)
+                isAllAlternativesMode && ctx.alternatives.size > 1 ->
+                    ctx.alternatives.flatMap { it.routeIds }.distinct().ifEmpty { listOf(baseId) }
+                else ->
+                    ctx.alternatives.getOrNull(ctx.activeAlternativeIndex)?.routeIds?.ifEmpty { listOf(baseId) }
+                        ?: listOf(baseId)
             }
         }
     }
 
-    val activeVariant = variants.getOrNull(selectedVariantIndex)
+    val displayedStopsRouteId = remember(selectedLine, manualSubVariantId, selectedTripRouteId, nextDepartureInfo) {
+        manualSubVariantId
+            ?: selectedTripRouteId
+            ?: nextDepartureInfo?.nextRouteId
+            ?: selectedLine?.routeId
+    }
+
+    LaunchedEffect(displayedStopsRouteId) {
+        val rId = displayedStopsRouteId
+        if (rId != null) {
+            variants = withContext(Dispatchers.IO) { variantRepository.getVariants(rId) }
+            displayedLineForCard = if (selectedLine?.routeId == rId) {
+                selectedLine
+            } else {
+                withContext(Dispatchers.IO) { repository.getLine(rId) }
+            }
+        }
+    }
+
+    val activeVariant = variants.firstOrNull()
     val currentStops = activeVariant?.stops ?: emptyList()
     val refStop = currentStops.getOrNull(selectedStopSequenceIndex)
 
-    LaunchedEffect(selectedLine, refStop?.stopId) {
-        val line = selectedLine
-        if (line != null) {
+    LaunchedEffect(activeQueryRouteIds) {
+        if (activeQueryRouteIds.isNotEmpty() && !autoCheckedEndOfDay) {
+            val now = LocalDateTime.now()
+            val serviceToday = scheduleRepo.currentServiceDate(now)
+            val todayDeps = withContext(Dispatchers.IO) {
+                scheduleRepo.getDeparturesForDayOfWeek(activeQueryRouteIds, serviceToday.dayOfWeek, now = now)
+            }
+            if (todayDeps.isNotEmpty() && todayDeps.none { !it.departureAt.isBefore(now) }) {
+                isTodayMode = false
+                selectedDayOfWeek = serviceToday.plusDays(1).dayOfWeek
+            }
+            autoCheckedEndOfDay = true
+        }
+    }
+
+    LaunchedEffect(activeQueryRouteIds, refStop?.stopId, userPickedStopInList) {
+        if (activeQueryRouteIds.isNotEmpty()) {
+            val stopIdForQuery = if (userPickedStopInList || activeQueryRouteIds.size == 1) refStop?.stopId else null
             val info = withContext(Dispatchers.IO) {
-                scheduleRepo.getNextDepartureForLineAtStop(line.routeId, refStop?.stopId)
+                scheduleRepo.getNextDepartureForLineAtStop(activeQueryRouteIds, stopIdForQuery)
             }
             nextDepartureInfo = info
-            if (info.nextTripId != null) {
+            if (info.nextTripId != null && selectedTripIdForTimeline == null) {
                 selectedTripIdForTimeline = info.nextTripId
+                selectedTripRouteId = info.nextRouteId
             }
         }
     }
 
-    LaunchedEffect(selectedLine, isTodayMode, selectedDayOfWeek) {
-        val line = selectedLine
-        if (line != null) {
+    LaunchedEffect(activeQueryRouteIds, isTodayMode, selectedDayOfWeek) {
+        if (activeQueryRouteIds.isNotEmpty()) {
             val now = LocalDateTime.now()
             val targetDay = if (isTodayMode) scheduleRepo.currentServiceDate(now).dayOfWeek else selectedDayOfWeek
             val deps = withContext(Dispatchers.IO) {
-                scheduleRepo.getDeparturesForDayOfWeek(line.routeId, targetDay, now = now)
+                scheduleRepo.getDeparturesForDayOfWeek(activeQueryRouteIds, targetDay, now = now)
             }
             dailyDepartures = deps
 
@@ -1197,6 +1371,7 @@ fun LineSearchScreen(
                 }
                 if (nextDep != null) {
                     selectedTripIdForTimeline = nextDep.tripId
+                    selectedTripRouteId = nextDep.routeId
                 }
             }
         }
@@ -1209,6 +1384,50 @@ fun LineSearchScreen(
                 getTripStopTimes(database, tId)
             }
         }
+    }
+
+    if (showDifferencesDialog && detailsContext != null) {
+        val ctx = detailsContext!!
+        AlertDialog(
+            onDismissRequest = { showDifferencesDialog = false },
+            title = {
+                Text("הבדלים בין המסלולים", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (ctx.alternatives.size > 1) {
+                        Text("חלופות קו:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        ctx.alternatives.forEach { alt ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(alt.label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.secondary)
+                                Text(alt.differenceSummary, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                    if (!isAllAlternativesMode && ctx.subVariants.size > 1) {
+                        if (ctx.alternatives.size > 1) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        }
+                        Text("שינויים במסלול לפי שעה:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        ctx.subVariants.forEach { sub ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(sub.label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                Text(sub.differenceSummary, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDifferencesDialog = false }) { Text("סגירה") }
+            }
+        )
     }
 
     if (showDayPickerDialog) {
@@ -1600,6 +1819,12 @@ fun LineSearchScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     SearchHistoryHelper.addHistory(context, "line_history", group.lineNumber)
+                                    isAllAlternativesMode = false
+                                    manualSubVariantId = null
+                                    userPickedStopInList = false
+                                    selectedStopSequenceIndex = 0
+                                    selectedTripIdForTimeline = null
+                                    selectedTripRouteId = null
                                     selectedRouteId = group.forwardLine.routeId
                                     selectedLine = group.forwardLine
                                 }
@@ -1620,6 +1845,12 @@ fun LineSearchScreen(
                                     .fillMaxWidth()
                                     .clickable {
                                         SearchHistoryHelper.addHistory(context, "line_history", group.lineNumber)
+                                        isAllAlternativesMode = false
+                                        manualSubVariantId = null
+                                        userPickedStopInList = false
+                                        selectedStopSequenceIndex = 0
+                                        selectedTripIdForTimeline = null
+                                        selectedTripRouteId = null
                                         selectedRouteId = group.backwardLine.routeId
                                         selectedLine = group.backwardLine
                                     }
@@ -1637,20 +1868,19 @@ fun LineSearchScreen(
                 }
             }
         } else {
-            val line = selectedLine!!
-
-            val matchingGroup = groupedLines.firstOrNull {
-                it.forwardLine.routeId == line.routeId || it.backwardLine?.routeId == line.routeId
-            }
-            val oppositeLine = if (matchingGroup != null) {
-                if (matchingGroup.forwardLine.routeId == line.routeId) matchingGroup.backwardLine else matchingGroup.forwardLine
+            val baseLine = selectedLine!!
+            val cardLine = displayedLineForCard ?: baseLine
+            val ctx = detailsContext
+            val oppRouteId = if (isAllAlternativesMode && ctx != null) {
+                ctx.alternatives.getOrNull(ctx.activeAlternativeIndex)?.oppositeRouteIds?.firstOrNull()
+                    ?: ctx.alternatives.firstNotNullOfOrNull { it.oppositeRouteIds.firstOrNull() }
             } else {
-                oppositeLineForSelected
+                ctx?.oppositeRouteIds?.firstOrNull()
             }
 
-            val normOrigCity = OperatorTheme.normalizeHebrew(line.originCity)
-            val normDestCity = OperatorTheme.normalizeHebrew(line.destinationCity)
-            val isUrbanLine = line.originCity.isNotBlank() && line.destinationCity.isNotBlank() &&
+            val normOrigCity = OperatorTheme.normalizeHebrew(cardLine.originCity)
+            val normDestCity = OperatorTheme.normalizeHebrew(cardLine.destinationCity)
+            val isUrbanLine = cardLine.originCity.isNotBlank() && cardLine.destinationCity.isNotBlank() &&
                 (normOrigCity == normDestCity || normOrigCity.contains(normDestCity) || normDestCity.contains(normOrigCity))
 
             Card(
@@ -1671,13 +1901,13 @@ fun LineSearchScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            TransitLineBadge(lineNumber = line.lineNumber, agencyName = line.agencyName)
-                            Text(line.agencyName, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                            TransitLineBadge(lineNumber = cardLine.lineNumber, agencyName = cardLine.agencyName)
+                            Text(cardLine.agencyName, fontWeight = FontWeight.Medium, fontSize = 13.sp)
 
-                            val topCityLabel = if (isUrbanLine || line.destinationCity.isBlank()) {
-                                line.originCity.ifBlank { line.destinationCity }
+                            val topCityLabel = if (isUrbanLine || cardLine.destinationCity.isBlank()) {
+                                cardLine.originCity.ifBlank { cardLine.destinationCity }
                             } else {
-                                "מ- ${line.originCity} ← ל- ${line.destinationCity}"
+                                "מ- ${cardLine.originCity} ← ל- ${cardLine.destinationCity}"
                             }
 
                             if (topCityLabel.isNotBlank()) {
@@ -1685,13 +1915,15 @@ fun LineSearchScreen(
                             }
                         }
 
-                        if (oppositeLine != null) {
+                        if (oppRouteId != null) {
                             FilledTonalButton(
                                 onClick = {
-                                    selectedRouteId = oppositeLine.routeId
-                                    selectedLine = oppositeLine
+                                    manualSubVariantId = null
+                                    userPickedStopInList = false
                                     selectedStopSequenceIndex = 0
                                     selectedTripIdForTimeline = null
+                                    selectedTripRouteId = null
+                                    selectedRouteId = oppRouteId
                                 },
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier
@@ -1710,22 +1942,87 @@ fun LineSearchScreen(
                         }
                     }
 
-                    val originFull = if (!isUrbanLine && line.originCity.isNotBlank() && !line.originName.contains(line.originCity)) {
-                        "${line.originName} - ${line.originCity}"
+                    val originFull = if (!isUrbanLine && cardLine.originCity.isNotBlank() && !cardLine.originName.contains(cardLine.originCity)) {
+                        "${cardLine.originName} - ${cardLine.originCity}"
                     } else {
-                        line.originName
+                        cardLine.originName
                     }
 
-                    val destFull = if (!isUrbanLine && line.destinationCity.isNotBlank() && !line.destinationName.contains(line.destinationCity)) {
-                        "${line.destinationName} - ${line.destinationCity}"
+                    val destFull = if (!isUrbanLine && cardLine.destinationCity.isNotBlank() && !cardLine.destinationName.contains(cardLine.destinationCity)) {
+                        "${cardLine.destinationName} - ${cardLine.destinationCity}"
                     } else {
-                        line.destinationName
+                        cardLine.destinationName
                     }
 
                     val mainHeading = if (destFull.isNotBlank()) "מ- $originFull ← ל- $destFull" else originFull
 
                     Text(mainHeading, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
                     Text("סה\"כ ${currentStops.size} תחנות במסלול הקו", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+
+                    // בורר חלופות עליון מובחן (רק כשיש לקו מספר חלופות בעלות מוצא/יעד שונה)
+                    if (ctx != null && ctx.alternatives.size > 1) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            itemVerticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ctx.alternatives.forEachIndexed { idx, alt ->
+                                val selected = !isAllAlternativesMode && ctx.activeAlternativeIndex == idx
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = {
+                                        isAllAlternativesMode = false
+                                        manualSubVariantId = null
+                                        userPickedStopInList = false
+                                        selectedStopSequenceIndex = 0
+                                        selectedTripIdForTimeline = null
+                                        selectedTripRouteId = null
+                                        selectedRouteId = alt.primaryLine.routeId
+                                        selectedLine = alt.primaryLine
+                                    },
+                                    label = {
+                                        Text(alt.label, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
+                                        selectedLabelColor = MaterialTheme.colorScheme.secondary
+                                    )
+                                )
+                            }
+
+                            FilterChip(
+                                selected = isAllAlternativesMode,
+                                onClick = {
+                                    isAllAlternativesMode = true
+                                    manualSubVariantId = null
+                                    userPickedStopInList = false
+                                    selectedStopSequenceIndex = 0
+                                    selectedTripIdForTimeline = null
+                                    selectedTripRouteId = null
+                                },
+                                label = {
+                                    Text("כל החלופות", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.secondary
+                                )
+                            )
+
+                            OutlinedButton(
+                                onClick = { showDifferencesDialog = true },
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            ) {
+                                Text("הבדלים ⓘ", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1738,6 +2035,53 @@ fun LineSearchScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("רשימת התחנות", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+
+                    // בורר משני קומפקטי לתתי-מסלולים בעלי אותם מוצא ויעד (ברירת מחדל: אוטומטי לפי שעה)
+                    if (!isAllAlternativesMode && ctx != null && ctx.subVariants.size > 1) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            itemVerticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilterChip(
+                                selected = manualSubVariantId == null,
+                                onClick = {
+                                    manualSubVariantId = null
+                                    selectedStopSequenceIndex = 0
+                                    userPickedStopInList = false
+                                    selectedTripIdForTimeline = null
+                                    selectedTripRouteId = null
+                                },
+                                label = { Text("לפי שעה", fontSize = 11.sp) },
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            ctx.subVariants.forEach { sub ->
+                                FilterChip(
+                                    selected = manualSubVariantId == sub.routeId,
+                                    onClick = {
+                                        manualSubVariantId = sub.routeId
+                                        selectedStopSequenceIndex = 0
+                                        userPickedStopInList = false
+                                        selectedTripIdForTimeline = null
+                                        selectedTripRouteId = sub.routeId
+                                    },
+                                    label = { Text(sub.label, fontSize = 11.sp) },
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                            }
+
+                            if (ctx.alternatives.size <= 1) {
+                                TextButton(
+                                    onClick = { showDifferencesDialog = true },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                ) {
+                                    Text("הבדלים ⓘ", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
 
                     val info = nextDepartureInfo
                     if (info != null) {
@@ -1806,7 +2150,10 @@ fun LineSearchScreen(
                                 modifier = Modifier
                                     .size(26.dp)
                                     .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                                    .clickable { selectedStopSequenceIndex = idx },
+                                    .clickable {
+                                        selectedStopSequenceIndex = idx
+                                        userPickedStopInList = true
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -1915,6 +2262,7 @@ fun LineSearchScreen(
                                         .padding(1.dp)
                                         .clickable(enabled = !isPastTrip) {
                                             selectedTripIdForTimeline = dep.tripId
+                                            selectedTripRouteId = dep.routeId
                                         }
                                 ) {
                                     Text(
