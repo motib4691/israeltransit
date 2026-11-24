@@ -27,17 +27,19 @@ class TransitStopDetailsRepository(context: Context) {
                     r.route_id,
                     COALESCE(NULLIF(r.route_short_name, ''), r.route_id) AS line_number,
                     COALESCE(r.route_long_name, '') AS line_name
-                FROM stop_times AS st
-                INNER JOIN trips AS t
-                    ON t.trip_id = st.trip_id
+                FROM stops AS s
+                INNER JOIN route_pattern_stops AS rps
+                    ON rps.stop_idx = s.stop_idx
+                INNER JOIN route_patterns AS rp
+                    ON rp.pattern_id = rps.pattern_id
                 INNER JOIN routes AS r
-                    ON r.route_id = t.route_id
-                WHERE st.stop_id = ?
+                    ON r.route_idx = rp.route_idx
+                WHERE s.stop_id = ? OR s.parent_station = ?
                 ORDER BY line_number, line_name
                 LIMIT 100
             """.trimIndent()
 
-            readableDatabase.rawQuery(sql, arrayOf(stopId)).use { cursor ->
+            readableDatabase.rawQuery(sql, arrayOf(stopId, stopId)).use { cursor ->
                 val routeIdIndex = cursor.getColumnIndexOrThrow("route_id")
                 val lineNumberIndex = cursor.getColumnIndexOrThrow("line_number")
                 val lineNameIndex = cursor.getColumnIndexOrThrow("line_name")
