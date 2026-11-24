@@ -8,6 +8,141 @@ def table_columns(conn, table):
     return {row[1] for row in rows}
 
 
+def get_format_version(conn, existing_tables):
+    if "import_metadata" not in existing_tables:
+        return 0
+    try:
+        row = conn.execute(
+            "SELECT value FROM import_metadata WHERE key = 'format_version'"
+        ).fetchone()
+        return int(row[0]) if row and str(row[0]).isdigit() else 0
+    except Exception:
+        return 0
+
+
+def validate_v6_database(conn, existing_tables):
+    required_v6_tables = {
+        "agency",
+        "routes",
+        "stops",
+        "calendar",
+        "calendar_dates",
+        "headsigns",
+        "route_patterns",
+        "route_pattern_stops",
+        "timing_profiles",
+        "pattern_schedules",
+    }
+
+    missing = required_v6_tables - existing_tables
+    if missing:
+        raise RuntimeError(
+            "Missing required v6 tables: " + ", ".join(sorted(missing))
+        )
+
+    required_stop_cols = {
+        "stop_idx",
+        "stop_id",
+        "stop_code",
+        "stop_name",
+        "stop_lat",
+        "stop_lon",
+        "parent_station",
+        "stop_desc",
+        "platform_code",
+    }
+    stops_cols = table_columns(conn, "stops")
+    if not required_stop_cols.issubset(stops_cols):
+        raise RuntimeError("The stops table is missing required v6 columns.")
+
+    required_route_cols = {
+        "route_idx",
+        "route_id",
+        "agency_id",
+        "route_short_name",
+        "route_long_name",
+        "route_type",
+        "route_desc",
+    }
+    routes_cols = table_columns(conn, "routes")
+    if not required_route_cols.issubset(routes_cols):
+        raise RuntimeError("The routes table is missing required v6 columns.")
+
+    print("Detected v6 compact transit database. Ensuring indexes...")
+
+    v6_indexes = [
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_stops_stop_id ON stops(stop_id)",
+        "CREATE INDEX IF NOT EXISTS idx_stops_code ON stops(stop_code)",
+        "CREATE INDEX IF NOT EXISTS idx_stops_parent ON stops(parent_station)",
+        "CREATE INDEX IF NOT EXISTS idx_stops_lat_lon ON stops(stop_lat, stop_lon)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_routes_route_id ON routes(route_id)",
+        "CREATE INDEX IF NOT EXISTS idx_routes_short_name ON routes(route_short_name)",
+        "CREATE INDEX IF NOT EXISTS idx_patterns_route_idx ON route_patterns(route_idx)",
+        "CREATE INDEX IF NOT EXISTS idx_rps_stop_idx ON route_pattern_stops(stop_idx, pattern_id)",
+        "CREATE INDEX IF NOT EXISTS idx_calendar_dates_range ON calendar(start_date, end_date)",
+    ]
+
+    for statement in v6_indexes:
+        conn.execute(statement)
+    conn.commit()
+
+    print("Validating v6 routing and schedule data...")
+
+    pattern_count = conn.execute(
+        "SELECT COUNT(*) FROM route_patterns"
+    ).fetchone()[0]
+    schedule_count = conn.execute(
+        "SELECT COUNT(*) FROM pattern_schedules"
+    ).fetchone()[0]
+    profile_count = conn.execute(
+        "SELECT COUNT(*) FROM timing_profiles"
+    ).fetchone()[0]
+    stop_count = conn.execute(
+        "SELECT COUNT(*) FROM stops"
+    ).fetchone()[0]
+    route_count = conn.execute(
+        "SELECT COUNT(*) FROM routes"
+    ).fetchone()[0]
+    total_trips = conn.execute(
+        "SELECT COALESCE(SUM(trip_count), 0) FROM pattern_schedules"
+    ).fetchone()[0]
+
+    if pattern_count == 0 or schedule_count == 0:
+        raise RuntimeError("No routing patterns or schedules found in v6 database.")
+
+    missing_schedules = conn.execute("""
+        SELECT COUNT(*)
+        FROM route_patterns rp
+        LEFT JOIN pattern_schedules ps
+            ON ps.pattern_id = rp.pattern_id
+        WHERE ps.pattern_id IS NULL
+    """).fetchone()[0]
+    if missing_schedules:
+        raise RuntimeError(
+            f"{missing_schedules:,} patterns have no schedule data."
+        )
+
+    missing_stops = conn.execute("""
+        SELECT COUNT(*)
+        FROM route_pattern_stops rps
+        LEFT JOIN stops s
+            ON s.stop_idx = rps.stop_idx
+        WHERE s.stop_idx IS NULL
+    """).fetchone()[0]
+    if missing_stops:
+        raise RuntimeError(
+            f"{missing_stops:,} pattern stop entries reference missing stops."
+        )
+
+    print("")
+    print("v6 routing validation completed.")
+    print(f"Stops: {stop_count:,}")
+    print(f"Routes: {route_count:,}")
+    print(f"Patterns: {pattern_count:,}")
+    print(f"Timing profiles: {profile_count:,}")
+    print(f"Trips: {total_trips:,}")
+
+
 def prepare_database(db_path):
     db_path = Path(db_path)
 
@@ -17,19 +152,27 @@ def prepare_database(db_path):
     conn = sqlite3.connect(str(db_path))
 
     try:
+        existing_tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+
+        format_version = get_format_version(conn, existing_tables)
+        if format_version >= 6 or (
+            "pattern_schedules" in existing_tables
+            and "timing_profiles" in existing_tables
+        ):
+            validate_v6_database(conn, existing_tables)
+            return
+
         required_tables = {
             "trips",
             "stop_times",
             "routes",
             "stops",
             "calendar",
-        }
-
-        existing_tables = {
-            row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
         }
 
         missing = required_tables - existing_tables
