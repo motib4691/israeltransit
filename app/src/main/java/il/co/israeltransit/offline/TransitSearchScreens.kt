@@ -1,3 +1,4 @@
+
 package il.co.israeltransit.offline
 
 import androidx.compose.ui.res.stringResource
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import il.co.israeltransit.offline.database.TransitDatabase
 import il.co.israeltransit.offline.database.TransitRepository
+import il.co.israeltransit.offline.database.TransitV6Codec
 import il.co.israeltransit.offline.maps.OfflineMapStorage
 import il.co.israeltransit.offline.maps.OfflineMapView
 import il.co.israeltransit.offline.schedule.TransitScheduleRepository
@@ -193,50 +195,38 @@ private class RouteVariantRepository(
 ) {
     fun getVariants(routeId: String): List<RouteVariant> {
         val db = database.openReadOnly() ?: return emptyList()
-        val variants = linkedMapOf<String, RouteVariant>()
+        val variants = linkedMapOf<Int, RouteVariant>()
 
         try {
             db.rawQuery(
                 """
                 SELECT
-                    t.trip_id,
-                    COALESCE(t.direction_id, ''),
-                    COALESCE(t.trip_headsign, ''),
-                    st.stop_id,
+                    rp.pattern_id,
+                    COALESCE(rp.direction_id, ''),
+                    COALESCE(h.text, ''),
+                    s.stop_id,
                     COALESCE(s.stop_name, ''),
-                    st.stop_sequence,
-                    st.arrival_time,
-                    st.departure_time,
+                    rps.stop_sequence,
                     COALESCE(NULLIF(s.stop_code, ''), s.stop_id) AS real_stop_code
-                FROM trips t
-                JOIN stop_times st ON st.trip_id = t.trip_id
-                LEFT JOIN stops s ON s.stop_id = st.stop_id
-                WHERE t.route_id = ?
-                ORDER BY t.trip_id, st.stop_sequence
+                FROM routes r
+                JOIN route_patterns rp ON rp.route_idx = r.route_idx
+                LEFT JOIN headsigns h ON h.headsign_idx = rp.headsign_idx
+                JOIN route_pattern_stops rps ON rps.pattern_id = rp.pattern_id
+                JOIN stops s ON s.stop_idx = rps.stop_idx
+                WHERE r.route_id = ?
+                ORDER BY rp.stop_count DESC, rp.pattern_id, rps.stop_sequence
                 """.trimIndent(),
                 arrayOf(routeId)
             ).use { cursor ->
-                var currentTripId: String? = null
+                var currentPatternId = -1
                 var directionId = ""
                 var headsign = ""
                 val stops = mutableListOf<TransitRepository.RouteStop>()
 
-                fun saveTrip() {
-                    if (currentTripId == null || stops.isEmpty()) return
-
-                    val signature = buildString {
-                        append(directionId)
-                        append('|')
-                        append(headsign)
-                        append('|')
-                        stops.forEach {
-                            append(it.stopId)
-                            append('>')
-                        }
-                    }
-
-                    if (!variants.containsKey(signature)) {
-                        variants[signature] = RouteVariant(
+                fun savePattern() {
+                    if (currentPatternId < 0 || stops.isEmpty()) return
+                    if (!variants.containsKey(currentPatternId)) {
+                        variants[currentPatternId] = RouteVariant(
                             directionId = directionId,
                             headsign = headsign,
                             stops = stops.toList()
@@ -245,12 +235,11 @@ private class RouteVariantRepository(
                 }
 
                 while (cursor.moveToNext()) {
-                    val tripId = cursor.getString(0) ?: ""
-
-                    if (tripId != currentTripId) {
-                        saveTrip()
+                    val patternId = cursor.getInt(0)
+                    if (patternId != currentPatternId) {
+                        savePattern()
                         stops.clear()
-                        currentTripId = tripId
+                        currentPatternId = patternId
                         directionId = cursor.getString(1) ?: ""
                         headsign = cursor.getString(2) ?: ""
                     }
@@ -260,14 +249,14 @@ private class RouteVariantRepository(
                             stopId = cursor.getString(3) ?: "",
                             name = cursor.getString(4) ?: "",
                             sequence = cursor.getInt(5),
-                            arrivalTime = if (cursor.isNull(6)) null else cursor.getInt(6),
-                            departureTime = if (cursor.isNull(7)) null else cursor.getInt(7),
-                            stopCode = cursor.getString(8) ?: ""
+                            arrivalTime = null,
+                            departureTime = null,
+                            stopCode = cursor.getString(6) ?: ""
                         )
                     )
                 }
 
-                saveTrip()
+                savePattern()
             }
         } finally {
             db.close()
@@ -278,20 +267,73 @@ private class RouteVariantRepository(
 }
 
 private fun getTripStopTimes(database: TransitDatabase, tripId: String): Map<String, String> {
+    val parts = tripId.split(":")
+    if (parts.size != 2) return emptyMap()
+    val patternId = parts[0].toIntOrNull() ?: return emptyMap()
+    val tripIndex = parts[1].toIntOrNull() ?: return emptyMap()
+    if (tripIndex < 0) return emptyMap()
+
     val db = database.openReadOnly() ?: return emptyMap()
     val result = mutableMapOf<String, String>()
     try {
+        var tripCount = 0
+        var tripsBlob: ByteArray? = null
         db.rawQuery(
-            "SELECT stop_id, COALESCE(departure_time, arrival_time) FROM stop_times WHERE trip_id = ?",
-            arrayOf(tripId)
+            "SELECT trip_count, trips_blob FROM pattern_schedules WHERE pattern_id = ? LIMIT 1",
+            arrayOf(patternId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                tripCount = cursor.getInt(0)
+                tripsBlob = cursor.getBlob(1)
+            }
+        }
+
+        val blob = tripsBlob ?: return emptyMap()
+        if (tripIndex >= tripCount) return emptyMap()
+
+        val schedule = TransitV6Codec.decodeSchedule(tripCount, blob)
+        val startSec = schedule.startSecs[tripIndex]
+        val profileId = schedule.profileIds[tripIndex]
+
+        var stopCount = 0
+        var profBlob: ByteArray? = null
+        db.rawQuery(
+            "SELECT stop_count, data FROM timing_profiles WHERE profile_id = ? LIMIT 1",
+            arrayOf(profileId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                stopCount = cursor.getInt(0)
+                profBlob = cursor.getBlob(1)
+            }
+        }
+
+        val pBlob = profBlob ?: return emptyMap()
+        val profile = TransitV6Codec.decodeProfile(stopCount, pBlob)
+
+        val stopIds = ArrayList<String>(stopCount)
+        db.rawQuery(
+            """
+            SELECT s.stop_id
+            FROM route_pattern_stops rps
+            JOIN stops s ON s.stop_idx = rps.stop_idx
+            WHERE rps.pattern_id = ?
+            ORDER BY rps.stop_sequence
+            """.trimIndent(),
+            arrayOf(patternId.toString())
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                val sId = cursor.getString(0) ?: continue
-                val sec = cursor.getInt(1)
-                val h = (sec / 3600) % 24
-                val m = (sec % 3600) / 60
-                result[sId] = String.format("%02d:%02d", h, m)
+                stopIds.add(cursor.getString(0) ?: "")
             }
+        }
+
+        val count = minOf(stopIds.size, profile.depOffsets.size)
+        for (i in 0 until count) {
+            val sId = stopIds[i]
+            if (sId.isEmpty()) continue
+            val sec = startSec + profile.depOffsets[i]
+            val h = (sec / 3600) % 24
+            val m = (sec % 3600) / 60
+            result[sId] = String.format("%02d:%02d", h, m)
         }
     } finally {
         db.close()
