@@ -233,7 +233,8 @@ fun RoutePlannerScreen(
                     maxTransfers = settings.maxTransfers,
                     minimumTransferMinutes = settings.minTransferMinutes.toLong(),
                     allowWalkingTransfers = settings.allowWalkingTransfers,
-                    maxResults = 5
+                    maxResults = 5,
+                    transitModePreference = settings.transitModePreference
                 )
             }
             routeResult = result
@@ -1078,7 +1079,7 @@ fun RoutePlannerScreen(
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         OfflineMapView(
-                            pmtilesFile = mapStorage.getMapFile(),
+                            pmtilesFile = mapFile,
                             modifier = Modifier.fillMaxSize(),
                             initialLatitude = initialLat,
                             initialLongitude = initialLon,
