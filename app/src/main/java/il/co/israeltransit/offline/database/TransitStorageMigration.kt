@@ -506,19 +506,12 @@ class TransitStorageMigration(context: Context) {
                 }
             }
 
-            val requiredTables = listOf(
-                "agency",
-                "routes",
-                "trips",
-                "stops",
-                "stop_times",
-                "calendar",
-                "route_patterns",
-                "route_pattern_stops",
-                "trip_patterns"
-            )
+            val formatVersion = TransitV6Codec.readFormatVersion(database)
+            require(formatVersion >= TransitDatabase.SUPPORTED_FORMAT_VERSION) {
+                "גרסת מאגר הנתונים אינה נתמכת להעברה"
+            }
 
-            for (table in requiredTables) {
+            for (table in TransitV6Codec.REQUIRED_TABLES) {
                 database.rawQuery(
                     """
                     SELECT name
@@ -536,20 +529,20 @@ class TransitStorageMigration(context: Context) {
             database.rawQuery(
                 """
                 SELECT
-                    (SELECT COUNT(*) FROM trips),
-                    (SELECT COUNT(*) FROM trip_patterns),
+                    (SELECT COUNT(*) FROM route_patterns),
+                    (SELECT COUNT(*) FROM pattern_schedules),
                     (
                         SELECT COUNT(*)
-                        FROM trips t
-                        LEFT JOIN trip_patterns tp
-                            ON tp.trip_id = t.trip_id
-                        WHERE tp.trip_id IS NULL
+                        FROM route_patterns rp
+                        LEFT JOIN pattern_schedules ps
+                            ON ps.pattern_id = rp.pattern_id
+                        WHERE ps.pattern_id IS NULL
                     )
                 """.trimIndent(),
                 null
             ).use { cursor ->
                 require(cursor.moveToFirst()) {
-                    "לא ניתן לבדוק את שיוך הנסיעות"
+                    "לא ניתן לבדוק את שיוך לוחות הזמנים"
                 }
 
                 require(
@@ -557,7 +550,7 @@ class TransitStorageMigration(context: Context) {
                         cursor.getLong(0) == cursor.getLong(1) &&
                         cursor.getLong(2) == 0L
                 ) {
-                    "שיוך הנסיעות למסלולים אינו תקין"
+                    "שיוך המסלולים ללוחות הזמנים אינו תקין"
                 }
             }
         } finally {
