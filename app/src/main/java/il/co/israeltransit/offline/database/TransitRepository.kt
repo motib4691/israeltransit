@@ -1335,26 +1335,26 @@ class TransitRepository(
                 SELECT
                     s.stop_id,
                     COALESCE(s.stop_name, ''),
-                    st.stop_sequence,
-                    st.arrival_time,
-                    st.departure_time,
+                    rps.stop_sequence,
+                    NULL AS arrival_time,
+                    NULL AS departure_time,
                     COALESCE(NULLIF(s.stop_code, ''), s.stop_id) AS real_stop_code
-                FROM trips t
-                JOIN stop_times st ON st.trip_id = t.trip_id
-                JOIN stops s ON s.stop_id = st.stop_id
-                WHERE t.route_id = ?
-                  AND t.trip_id = (
-                      SELECT trip_id
-                      FROM trips
-                      WHERE route_id = ?
-                      ORDER BY trip_id
+                FROM routes r
+                JOIN route_patterns rp ON rp.route_idx = r.route_idx
+                JOIN route_pattern_stops rps ON rps.pattern_id = rp.pattern_id
+                JOIN stops s ON s.stop_idx = rps.stop_idx
+                WHERE r.route_id = ?
+                  AND rp.pattern_id = (
+                      SELECT rp2.pattern_id
+                      FROM route_patterns rp2
+                      WHERE rp2.route_idx = r.route_idx
+                      ORDER BY rp2.stop_count DESC, rp2.pattern_id
                       LIMIT 1
                   )
-                ORDER BY st.stop_sequence
+                ORDER BY rps.stop_sequence
                 LIMIT ?
                 """.trimIndent(),
                 arrayOf(
-                    routeId,
                     routeId,
                     limit.coerceIn(1, 2000).toString()
                 )
@@ -1388,9 +1388,9 @@ class TransitRepository(
         return try {
             val schema = getStopsSchemaInfo(db)
             val stopFilterSql = if (schema.hasParentStation) {
-                "(st.stop_id = ? OR st.stop_id IN (SELECT stop_id FROM stops WHERE parent_station = ?))"
+                "(target.stop_id = ? OR target.parent_station = ?)"
             } else {
-                "st.stop_id = ?"
+                "target.stop_id = ?"
             }
 
             val queryArgs = if (schema.hasParentStation) {
@@ -1409,9 +1409,10 @@ class TransitRepository(
                     COALESCE(a.agency_name, ''),
                     COALESCE(r.route_type, ''),
                     COALESCE(r.route_desc, '')
-                FROM stop_times st
-                JOIN trips t ON t.trip_id = st.trip_id
-                JOIN routes r ON r.route_id = t.route_id
+                FROM stops target
+                JOIN route_pattern_stops rps ON rps.stop_idx = target.stop_idx
+                JOIN route_patterns rp ON rp.pattern_id = rps.pattern_id
+                JOIN routes r ON r.route_idx = rp.route_idx
                 LEFT JOIN agency a ON a.agency_id = r.agency_id
                 WHERE $stopFilterSql
                 LIMIT ?
