@@ -72,18 +72,20 @@ class AddressSearchRepository(context: Context) {
             if (houseNumberToken != null && streetWords.isNotBlank()) {
                 val sql = if (secondPart.isNotEmpty()) {
                     """
-                    SELECT city, street_name, house_number, lat, lon
-                    FROM addresses
-                    WHERE street_name LIKE ? AND house_number = ? AND city LIKE ?
-                    ORDER BY CASE WHEN street_name = ? THEN 0 ELSE 1 END, city, street_name
+                    SELECT s.city, s.street_name, a.house_number, a.lat, a.lon
+                    FROM addresses a
+                    JOIN streets s ON s.street_id = a.street_id
+                    WHERE s.street_name LIKE ? AND a.house_number = ? AND s.city LIKE ?
+                    ORDER BY CASE WHEN s.street_name = ? THEN 0 ELSE 1 END, s.city, s.street_name
                     LIMIT ?
                     """.trimIndent()
                 } else {
                     """
-                    SELECT city, street_name, house_number, lat, lon
-                    FROM addresses
-                    WHERE street_name LIKE ? AND house_number = ?
-                    ORDER BY CASE WHEN street_name = ? THEN 0 ELSE 1 END, city, street_name
+                    SELECT s.city, s.street_name, a.house_number, a.lat, a.lon
+                    FROM addresses a
+                    JOIN streets s ON s.street_id = a.street_id
+                    WHERE s.street_name LIKE ? AND a.house_number = ?
+                    ORDER BY CASE WHEN s.street_name = ? THEN 0 ELSE 1 END, s.city, s.street_name
                     LIMIT ?
                     """.trimIndent()
                 }
@@ -126,7 +128,7 @@ class AddressSearchRepository(context: Context) {
                 }
             }
 
-            // 2. חיפוש ערים, יישובים ושכונות (רק אם לא הוזן מספר בית או פסיק)
+            // 2. חיפוש ערים, יישובים, שכונות ומוסדות/אתרים מרכזיים (רק אם לא הוזן מספר בית או פסיק)
             if (houseNumberToken == null && secondPart.isEmpty()) {
                 db.rawQuery(
                     """
@@ -142,8 +144,17 @@ class AddressSearchRepository(context: Context) {
                         CASE kind
                             WHEN 'city' THEN 0
                             WHEN 'town' THEN 1
-                            WHEN 'village' THEN 2
-                            ELSE 3
+                            WHEN 'hospital' THEN 2
+                            WHEN 'university' THEN 3
+                            WHEN 'airport' THEN 4
+                            WHEN 'train_station' THEN 5
+                            WHEN 'bus_station' THEN 6
+                            WHEN 'mall' THEN 7
+                            WHEN 'suburb' THEN 8
+                            WHEN 'quarter' THEN 9
+                            WHEN 'neighbourhood' THEN 10
+                            WHEN 'village' THEN 11
+                            ELSE 12
                         END,
                         name
                     LIMIT ?
@@ -152,7 +163,7 @@ class AddressSearchRepository(context: Context) {
                         "%$trimmed%",
                         trimmed,
                         "$trimmed%",
-                        10.toString()
+                        14.toString()
                     )
                 ).use { cursor ->
                     while (cursor.moveToNext()) {
@@ -166,7 +177,17 @@ class AddressSearchRepository(context: Context) {
                             "city" -> "עיר"
                             "town" -> "עיר / יישוב"
                             "village" -> "יישוב / כפר"
-                            else -> "שכונה / רובע"
+                            "suburb", "quarter", "neighbourhood" -> "שכונה / רובע"
+                            "hospital" -> "בית חולים / מרכז רפואי"
+                            "university" -> "אוניברסיטה / מכללה"
+                            "mall" -> "קניון / מרכז קניות"
+                            "airport" -> "שדה תעופה"
+                            "train_station" -> "תחנת רכבת"
+                            "bus_station" -> "מסוף / תחנה מרכזית"
+                            "parking" -> "חניון חנה וסע"
+                            "park" -> "פארק / שמורת טבע"
+                            "poi" -> "מוזיאון / אתר מרכזי"
+                            else -> "אתר / שכונה"
                         }
 
                         results.add(
@@ -286,16 +307,56 @@ class AddressSearchRepository(context: Context) {
     }
 
     /**
-     * זיהוי הרחוב או היישוב הקרוב ביותר לקואורדינטה (עבור לחיצה ארוכה על המפה)
+     * זיהוי הכתובת, הרחוב, השכונה או היישוב הקרוב ביותר לקואורדינטה (עבור לחיצה ארוכה על המפה)
      */
     fun findNearestPlaceLabel(latitude: Double, longitude: Double): String? {
         val db = openReadOnly() ?: return null
         val cosLat = cos(Math.toRadians(latitude)).coerceAtLeast(0.1)
 
         try {
-            // חיפוש רחוב קרוב ברדיוס של ~400 מטר
-            val dLat = 0.004
-            val dLon = 0.004 / cosLat
+            // 1. חיפוש כתובת/בניין קרוב ברדיוס של ~180 מטר
+            val aLat = 0.0018
+            val aLon = 0.0018 / cosLat
+
+            var bestAddressLabel: String? = null
+            var bestAddressDist = Double.MAX_VALUE
+
+            db.rawQuery(
+                """
+                SELECT s.street_name, a.house_number, s.city, a.lat, a.lon
+                FROM addresses a
+                JOIN streets s ON s.street_id = a.street_id
+                WHERE a.lat BETWEEN ? AND ? AND a.lon BETWEEN ? AND ?
+                LIMIT 150
+                """.trimIndent(),
+                arrayOf(
+                    (latitude - aLat).toString(),
+                    (latitude + aLat).toString(),
+                    (longitude - aLon).toString(),
+                    (longitude + aLon).toString()
+                )
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val street = cursor.getString(0) ?: continue
+                    val house = cursor.getString(1) ?: ""
+                    val city = cursor.getString(2) ?: ""
+                    val pLat = cursor.getDouble(3)
+                    val pLon = cursor.getDouble(4)
+                    val d2 = (latitude - pLat) * (latitude - pLat) +
+                        ((longitude - pLon) * cosLat) * ((longitude - pLon) * cosLat)
+                    if (d2 < bestAddressDist) {
+                        bestAddressDist = d2
+                        val base = if (house.isNotBlank()) "$street $house" else street
+                        bestAddressLabel = if (city.isNotBlank()) "$base, $city" else base
+                    }
+                }
+            }
+
+            if (bestAddressLabel != null) return bestAddressLabel
+
+            // 2. חיפוש רחוב קרוב ברדיוס של ~900 מטר
+            val dLat = 0.0085
+            val dLon = 0.0085 / cosLat
 
             var bestStreet: String? = null
             var bestStreetDist = Double.MAX_VALUE
@@ -305,7 +366,7 @@ class AddressSearchRepository(context: Context) {
                 SELECT street_name, city, lat, lon
                 FROM streets
                 WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
-                LIMIT 80
+                LIMIT 200
                 """.trimIndent(),
                 arrayOf(
                     (latitude - dLat).toString(),
@@ -330,17 +391,54 @@ class AddressSearchRepository(context: Context) {
 
             if (bestStreet != null) return bestStreet
 
-            // גיבוי: יישוב קרוב ברדיוס של ~10 ק"מ
-            val pDelta = 0.1
-            var bestPlace: String? = null
-            var bestPlaceDist = Double.MAX_VALUE
+            // 3. גיבוי: עדיפות לשכונה/רובע בטווח של ~2.5 ק"מ על פני כפר/יישוב חיצוני סמוך
+            val nDelta = 0.025
+            val nLonDelta = 0.025 / cosLat
+            var bestNeighbourhood: String? = null
+            var bestNeighbourhoodDist = Double.MAX_VALUE
 
             db.rawQuery(
                 """
                 SELECT name, lat, lon
                 FROM places
-                WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
-                LIMIT 40
+                WHERE kind IN ('suburb', 'quarter', 'neighbourhood')
+                  AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+                LIMIT 80
+                """.trimIndent(),
+                arrayOf(
+                    (latitude - nDelta).toString(),
+                    (latitude + nDelta).toString(),
+                    (longitude - nLonDelta).toString(),
+                    (longitude + nLonDelta).toString()
+                )
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(0) ?: continue
+                    val pLat = cursor.getDouble(1)
+                    val pLon = cursor.getDouble(2)
+                    val d2 = (latitude - pLat) * (latitude - pLat) +
+                        ((longitude - pLon) * cosLat) * ((longitude - pLon) * cosLat)
+                    if (d2 < bestNeighbourhoodDist) {
+                        bestNeighbourhoodDist = d2
+                        bestNeighbourhood = name
+                    }
+                }
+            }
+
+            // חיפוש עיר/יישוב קרוב ברדיוס של ~10 ק"מ
+            val pDelta = 0.1
+            var bestCity: String? = null
+            var bestCityDist = Double.MAX_VALUE
+            var bestSettlement: String? = null
+            var bestSettlementDist = Double.MAX_VALUE
+
+            db.rawQuery(
+                """
+                SELECT name, kind, lat, lon
+                FROM places
+                WHERE kind IN ('city', 'town', 'village')
+                  AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+                LIMIT 80
                 """.trimIndent(),
                 arrayOf(
                     (latitude - pDelta).toString(),
@@ -351,18 +449,31 @@ class AddressSearchRepository(context: Context) {
             ).use { cursor ->
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(0) ?: continue
-                    val pLat = cursor.getDouble(1)
-                    val pLon = cursor.getDouble(2)
+                    val kind = cursor.getString(1) ?: ""
+                    val pLat = cursor.getDouble(2)
+                    val pLon = cursor.getDouble(3)
                     val d2 = (latitude - pLat) * (latitude - pLat) +
                         ((longitude - pLon) * cosLat) * ((longitude - pLon) * cosLat)
-                    if (d2 < bestPlaceDist) {
-                        bestPlaceDist = d2
-                        bestPlace = "סמוך ל$name"
+                    if ((kind == "city" || kind == "town") && d2 < bestCityDist) {
+                        bestCityDist = d2
+                        bestCity = name
+                    }
+                    if (d2 < bestSettlementDist) {
+                        bestSettlementDist = d2
+                        bestSettlement = name
                     }
                 }
             }
 
-            return bestPlace
+            if (bestNeighbourhood != null) {
+                return if (bestCity != null && bestNeighbourhood != bestCity) {
+                    "$bestNeighbourhood, $bestCity"
+                } else {
+                    bestNeighbourhood
+                }
+            }
+
+            return bestSettlement?.let { "סמוך ל$it" }
         } catch (_: Exception) {
             return null
         } finally {
