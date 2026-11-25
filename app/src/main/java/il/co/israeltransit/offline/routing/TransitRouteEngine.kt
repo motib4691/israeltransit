@@ -1360,12 +1360,12 @@ class TransitRouteEngine(
                 }
             }
 
-            if (candidates.isEmpty()) return emptyList()
+if (candidates.isEmpty()) return emptyList()
 
             val ordered = if (arriveByMode) {
                 candidates.sortedWith(
-                    compareByDescending<Pair<Int, Journey>> { (_, j) ->
-                        if (preferTrain && network.routeIsRail[it.first]) j.arrivalAt.plusMinutes(5) else j.arrivalAt
+                    compareByDescending<Pair<Int, Journey>> { (rIdx, j) ->
+                        if (preferTrain && network.routeIsRail[rIdx]) j.arrivalAt.plusMinutes(5) else j.arrivalAt
                     }.thenByDescending { it.second.arrivalAt }
                         .thenByDescending { it.second.departureAt }
                 )
