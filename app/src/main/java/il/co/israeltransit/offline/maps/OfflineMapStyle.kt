@@ -57,8 +57,14 @@ object OfflineMapStyle {
             .put(majorRoadsFillLayer())
             .put(highwaysFillLayer())
             .put(highwayShieldsLayer())
+            .put(waterLabelsLayer())
+            .put(waterwayLabelsLayer())
+            .put(landuseLabelsLayer())
             .put(streetLabelsLayer())
+            .put(airportLabelsLayer())
             .put(stationLabelsLayer())
+            .put(tramStopLabelsLayer())
+            .put(poiLabelsLayer())
             .put(neighbourhoodLabelsLayer())
             .put(villageLabelsLayer())
             .put(cityLabelsLayer())
@@ -353,6 +359,85 @@ object OfflineMapStyle {
             )
     }
 
+    private fun waterLabelsLayer(): JSONObject {
+        return JSONObject()
+            .put("id", "water-labels")
+            .put("type", "symbol")
+            .put("source", SOURCE_ID)
+            .put("source-layer", "water")
+            .put("minzoom", 8)
+            .put("filter", JSONArray().put("has").put("name"))
+            .put(
+                "layout",
+                JSONObject()
+                    .put("text-field", JSONArray().put("get").put("name"))
+                    .put("text-font", JSONArray().put(FONT_STACK))
+                    .put("text-size", 11.5)
+                    .put("text-max-width", 8)
+                    .put("text-allow-overlap", false)
+            )
+            .put(
+                "paint",
+                JSONObject()
+                    .put("text-color", "#1565C0")
+                    .put("text-halo-color", "#FFFFFF")
+                    .put("text-halo-width", 1.6)
+            )
+    }
+
+    private fun waterwayLabelsLayer(): JSONObject {
+        return JSONObject()
+            .put("id", "waterway-labels")
+            .put("type", "symbol")
+            .put("source", SOURCE_ID)
+            .put("source-layer", "waterway")
+            .put("minzoom", 12)
+            .put("filter", JSONArray().put("has").put("name"))
+            .put(
+                "layout",
+                JSONObject()
+                    .put("symbol-placement", "line")
+                    .put("text-field", JSONArray().put("get").put("name"))
+                    .put("text-font", JSONArray().put(FONT_STACK))
+                    .put("text-size", 10.5)
+                    .put("text-max-width", 8)
+                    .put("text-allow-overlap", false)
+            )
+            .put(
+                "paint",
+                JSONObject()
+                    .put("text-color", "#1976D2")
+                    .put("text-halo-color", "#FFFFFF")
+                    .put("text-halo-width", 1.4)
+            )
+    }
+
+    private fun landuseLabelsLayer(): JSONObject {
+        return JSONObject()
+            .put("id", "landuse-labels")
+            .put("type", "symbol")
+            .put("source", SOURCE_ID)
+            .put("source-layer", "landuse")
+            .put("minzoom", 11)
+            .put("filter", JSONArray().put("has").put("name"))
+            .put(
+                "layout",
+                JSONObject()
+                    .put("text-field", JSONArray().put("get").put("name"))
+                    .put("text-font", JSONArray().put(FONT_STACK))
+                    .put("text-size", 11.0)
+                    .put("text-max-width", 9)
+                    .put("text-allow-overlap", false)
+            )
+            .put(
+                "paint",
+                JSONObject()
+                    .put("text-color", "#2E7D32")
+                    .put("text-halo-color", "#FFFFFF")
+                    .put("text-halo-width", 1.6)
+            )
+    }
+
     private fun streetLabelsLayer(): JSONObject {
         val nameExpression = JSONArray()
             .put("coalesce")
@@ -388,6 +473,32 @@ object OfflineMapStyle {
             )
     }
 
+    private fun airportLabelsLayer(): JSONObject {
+        return JSONObject()
+            .put("id", "airport-labels")
+            .put("type", "symbol")
+            .put("source", SOURCE_ID)
+            .put("source-layer", "places")
+            .put("minzoom", 10)
+            .put("filter", kindEquals("airport"))
+            .put(
+                "layout",
+                JSONObject()
+                    .put("text-field", JSONArray().put("get").put("name"))
+                    .put("text-font", JSONArray().put(FONT_STACK))
+                    .put("text-size", 11.5)
+                    .put("text-max-width", 9)
+                    .put("text-allow-overlap", false)
+            )
+            .put(
+                "paint",
+                JSONObject()
+                    .put("text-color", "#0277BD")
+                    .put("text-halo-color", "#FFFFFF")
+                    .put("text-halo-width", 1.8)
+            )
+    }
+
     private fun stationLabelsLayer(): JSONObject {
         val filter = JSONArray()
             .put("any")
@@ -416,6 +527,75 @@ object OfflineMapStyle {
                     .put("text-color", "#0D47A1")
                     .put("text-halo-color", "#FFFFFF")
                     .put("text-halo-width", 1.8)
+            )
+    }
+
+    private fun tramStopLabelsLayer(): JSONObject {
+        return JSONObject()
+            .put("id", "tram-stop-labels")
+            .put("type", "symbol")
+            .put("source", SOURCE_ID)
+            .put("source-layer", "places")
+            .put("minzoom", 13)
+            .put("filter", kindEquals("tram_stop"))
+            .put(
+                "layout",
+                JSONObject()
+                    .put("text-field", JSONArray().put("get").put("name"))
+                    .put("text-font", JSONArray().put(FONT_STACK))
+                    .put("text-size", 10.5)
+                    .put("text-max-width", 9)
+                    .put("text-allow-overlap", false)
+            )
+            .put(
+                "paint",
+                JSONObject()
+                    .put("text-color", "#5E35B1")
+                    .put("text-halo-color", "#FFFFFF")
+                    .put("text-halo-width", 1.6)
+            )
+    }
+
+    private fun poiLabelsLayer(): JSONObject {
+        val filter = JSONArray()
+            .put("any")
+            .put(kindEquals("hospital"))
+            .put(kindEquals("university"))
+            .put(kindEquals("mall"))
+            .put(kindEquals("parking"))
+            .put(kindEquals("poi"))
+
+        val colorExpr = JSONArray()
+            .put("match")
+            .put(JSONArray().put("get").put("kind"))
+            .put("hospital").put("#C62828")
+            .put("university").put("#283593")
+            .put("mall").put("#6A1B9A")
+            .put("parking").put("#0277BD")
+            .put("#4E342E")
+
+        return JSONObject()
+            .put("id", "poi-labels")
+            .put("type", "symbol")
+            .put("source", SOURCE_ID)
+            .put("source-layer", "places")
+            .put("minzoom", 12)
+            .put("filter", filter)
+            .put(
+                "layout",
+                JSONObject()
+                    .put("text-field", JSONArray().put("get").put("name"))
+                    .put("text-font", JSONArray().put(FONT_STACK))
+                    .put("text-size", 10.5)
+                    .put("text-max-width", 9)
+                    .put("text-allow-overlap", false)
+            )
+            .put(
+                "paint",
+                JSONObject()
+                    .put("text-color", colorExpr)
+                    .put("text-halo-color", "#FFFFFF")
+                    .put("text-halo-width", 1.6)
             )
     }
 
