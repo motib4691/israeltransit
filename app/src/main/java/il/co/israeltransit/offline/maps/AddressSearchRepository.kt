@@ -172,7 +172,7 @@ class AddressSearchRepository(context: Context) {
                         val lat = cursor.getDouble(2)
                         val lon = cursor.getDouble(3)
 
-                        val isCity = kindStr == "city" || kindStr == "town"
+                        val isCity = kindStr == "city" || kindStr == "town" || kindStr == "village"
                         val subtitle = when (kindStr) {
                             "city" -> "עיר"
                             "town" -> "עיר / יישוב"
