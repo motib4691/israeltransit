@@ -3,7 +3,6 @@ package il.co.israeltransit.offline.routing
 import android.content.Context
 import com.graphhopper.GHRequest
 import com.graphhopper.GraphHopper
-import com.graphhopper.config.CHProfile
 import com.graphhopper.config.Profile
 import com.graphhopper.util.CustomModel
 import com.graphhopper.util.Instruction
@@ -66,7 +65,6 @@ class GraphHopperWalkingRouter(context: Context) {
                     setGraphHopperLocation(path)
                     setAllowWrites(false)
                     setProfiles(footProfile)
-                    chPreparationHandler.setCHProfiles(CHProfile("foot"))
                 }
 
                 hopper.importOrLoad()
